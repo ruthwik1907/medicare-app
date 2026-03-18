@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAppContext, Role } from '../../context/AppContext';
-import { Activity, Mail, Lock, ArrowRight, ShieldCheck, UserCircle, Stethoscope } from 'lucide-react';
+import { Activity, Mail, Lock, ArrowRight, ShieldCheck, UserCircle, Stethoscope, Loader2 } from 'lucide-react';
+import toast from 'react-hot-toast';
 
 export default function Login() {
   const [email, setEmail] = useState('');
@@ -15,16 +16,30 @@ export default function Login() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    if (!email || !password) {
+      toast.error('Please enter both email and password.');
+      return;
+    }
+
     setIsLoading(true);
     
-    // Simulate network delay
-    await new Promise(resolve => setTimeout(resolve, 600));
-    
-    login(email, role);
-    if (redirectTo) {
-      navigate(redirectTo);
-    } else {
-      navigate(`/${role}`);
+    try {
+      const loggedInUser = await login(email, password, role);
+      toast.success('Successfully logged in!');
+      if (redirectTo) {
+        navigate(redirectTo);
+      } else {
+        navigate(`/${loggedInUser.role}`);
+      }
+    } catch (err: any) {
+      console.error("Login failed:", err);
+      if (err.code === 'auth/invalid-credential' || err.code === 'auth/user-not-found' || err.code === 'auth/wrong-password') {
+        toast.error("Invalid email or password.");
+      } else {
+        toast.error(err.message || "Login failed. Please try again.");
+      }
+      setIsLoading(false);
     }
   };
 
@@ -53,7 +68,7 @@ export default function Login() {
         <p className="mt-2 text-center text-sm text-slate-600">
           Don't have an account?{' '}
           <Link to="/register" className="font-bold text-indigo-600 hover:text-indigo-500 transition-colors">
-            Create a patient account
+            Create an account
           </Link>
         </p>
       </div>
@@ -75,7 +90,7 @@ export default function Login() {
                         : 'bg-white text-slate-600 border-2 border-slate-100 hover:border-slate-200 hover:bg-slate-50'
                     }`}
                   >
-                    {roleIcons[r]}
+                    {roleIcons[r as keyof typeof roleIcons]}
                     {r}
                   </button>
                 ))}
@@ -112,7 +127,7 @@ export default function Login() {
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     className="block w-full pl-10 pr-3 py-3 border border-slate-200 rounded-xl leading-5 bg-slate-50 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 focus:bg-white transition-colors sm:text-sm"
-                    placeholder="Any password works for prototype"
+                    placeholder="Enter your password"
                   />
                 </div>
               </div>

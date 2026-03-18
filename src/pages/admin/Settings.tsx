@@ -1,10 +1,37 @@
 import React, { useState } from 'react';
 import { useAppContext } from '../../context/AppContext';
-import { Settings as SettingsIcon, User, Bell, Shield, Key, Smartphone, Mail, Save, Building, Globe, Database } from 'lucide-react';
+import { Settings as SettingsIcon, User, Bell, Shield, Key, Smartphone, Mail, Save, Building, Globe, Database, Users, Plus, Edit2, Trash2 } from 'lucide-react';
 
 export default function AdminSettings() {
-  const { user } = useAppContext();
+  const { currentUser, users, createAdminUser, updateAdminUser, deleteUser } = useAppContext();
   const [activeTab, setActiveTab] = useState('general');
+  const [showAddAdmin, setShowAddAdmin] = useState(false);
+  const [newAdmin, setNewAdmin] = useState({ name: '', email: '', password: '', phone: '' });
+
+  const admins = users.filter(u => u.role === 'admin');
+
+  const handleAddAdmin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      await createAdminUser(newAdmin);
+      setShowAddAdmin(false);
+      setNewAdmin({ name: '', email: '', password: '', phone: '' });
+      alert('Admin created successfully');
+    } catch (error) {
+      console.error(error);
+    }
+  };
+
+  const handleDeleteAdmin = async (id: string) => {
+    if (window.confirm('Are you sure you want to delete this admin?')) {
+      try {
+        await deleteUser(id);
+      } catch (error) {
+        console.error(error);
+        alert('Failed to delete admin');
+      }
+    }
+  };
 
   return (
     <div className="space-y-6 max-w-5xl mx-auto">
@@ -62,6 +89,18 @@ export default function AdminSettings() {
           >
             <Globe className={`h-5 w-5 ${activeTab === 'integrations' ? 'text-indigo-600' : 'text-slate-400'}`} />
             Integrations
+          </button>
+          
+          <button
+            onClick={() => setActiveTab('admins')}
+            className={`flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all ${
+              activeTab === 'admins' 
+                ? 'bg-indigo-50 text-indigo-700 shadow-sm border border-indigo-100/50' 
+                : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+            }`}
+          >
+            <Users className={`h-5 w-5 ${activeTab === 'admins' ? 'text-indigo-600' : 'text-slate-400'}`} />
+            Admin Management
           </button>
           
           <button
@@ -260,6 +299,141 @@ export default function AdminSettings() {
                     Save Preferences
                   </button>
                 </div>
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'admins' && (
+            <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+              <div className="flex justify-between items-center">
+                <div>
+                  <h2 className="text-xl font-bold text-slate-900">Admin Management</h2>
+                  <p className="text-sm text-slate-500 mt-1">Create and manage administrator accounts.</p>
+                </div>
+                <button 
+                  onClick={() => setShowAddAdmin(!showAddAdmin)}
+                  className="inline-flex items-center px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-xl shadow-sm transition-colors"
+                >
+                  <Plus className="w-4 h-4 mr-2" />
+                  Add Admin
+                </button>
+              </div>
+
+              {showAddAdmin && (
+                <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200">
+                  <h3 className="text-lg font-bold text-slate-900 mb-4">Create New Admin</h3>
+                  <form onSubmit={handleAddAdmin} className="space-y-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <label className="text-sm font-medium text-slate-700">Full Name</label>
+                        <input 
+                          type="text" 
+                          required
+                          value={newAdmin.name}
+                          onChange={e => setNewAdmin({...newAdmin, name: e.target.value})}
+                          className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 text-sm"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-sm font-medium text-slate-700">Email Address</label>
+                        <input 
+                          type="email" 
+                          required
+                          value={newAdmin.email}
+                          onChange={e => setNewAdmin({...newAdmin, email: e.target.value})}
+                          className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 text-sm"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-sm font-medium text-slate-700">Phone Number</label>
+                        <input 
+                          type="tel" 
+                          value={newAdmin.phone}
+                          onChange={e => setNewAdmin({...newAdmin, phone: e.target.value})}
+                          className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 text-sm"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-sm font-medium text-slate-700">Password</label>
+                        <input 
+                          type="password" 
+                          required
+                          value={newAdmin.password}
+                          onChange={e => setNewAdmin({...newAdmin, password: e.target.value})}
+                          className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 text-sm"
+                        />
+                      </div>
+                    </div>
+                    <div className="flex justify-end gap-3 pt-4">
+                      <button 
+                        type="button"
+                        onClick={() => setShowAddAdmin(false)}
+                        className="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-xl transition-colors"
+                      >
+                        Cancel
+                      </button>
+                      <button 
+                        type="submit"
+                        className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-xl shadow-sm transition-colors"
+                      >
+                        Create Admin
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              )}
+
+              <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="bg-slate-50 border-b border-slate-200">
+                      <th className="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Admin</th>
+                      <th className="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Contact</th>
+                      <th className="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {admins.map((admin) => (
+                      <tr key={admin.id} className="hover:bg-slate-50/50 transition-colors">
+                        <td className="px-6 py-4">
+                          <div className="flex items-center gap-3">
+                            <img src={admin.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(admin.name)}&background=random`} alt={admin.name} className="w-10 h-10 rounded-full object-cover border border-slate-200" />
+                            <div>
+                              <p className="text-sm font-medium text-slate-900">{admin.name}</p>
+                              <p className="text-xs text-slate-500">Administrator</p>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="text-sm text-slate-600">{admin.email}</div>
+                          {admin.phone && <div className="text-xs text-slate-500 mt-0.5">{admin.phone}</div>}
+                        </td>
+                        <td className="px-6 py-4 text-right">
+                          <div className="flex items-center justify-end gap-2">
+                            <button className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors">
+                              <Edit2 className="w-4 h-4" />
+                            </button>
+                            {currentUser?.id !== admin.id && (
+                              <button 
+                                onClick={() => handleDeleteAdmin(admin.id)}
+                                className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                    {admins.length === 0 && (
+                      <tr>
+                        <td colSpan={3} className="px-6 py-8 text-center text-slate-500 text-sm">
+                          No administrators found.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
               </div>
             </div>
           )}

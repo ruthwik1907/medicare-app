@@ -4,13 +4,21 @@ import { useAppContext } from '../../context/AppContext';
 import { Navbar } from './Navbar';
 import { 
   LayoutDashboard, Calendar, FileText, CreditCard, MessageSquare, Settings, 
-  Users, UserPlus, Activity, PieChart, Building
+  Users, UserPlus, Activity, PieChart, Building, Loader2
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 
 export const DashboardLayout = ({ allowedRoles }: { allowedRoles: string[] }) => {
-  const { currentUser } = useAppContext();
+  const { currentUser, isAuthReady } = useAppContext();
   const location = useLocation();
+
+  if (!isAuthReady) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+        <Loader2 className="h-8 w-8 text-indigo-600 animate-spin" />
+      </div>
+    );
+  }
 
   if (!currentUser) {
     return <Navigate to="/login" state={{ from: location }} replace />;

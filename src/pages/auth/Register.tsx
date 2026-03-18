@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAppContext } from '../../context/AppContext';
 import { Activity, User, Mail, Phone, Lock, ArrowRight } from 'lucide-react';
+import toast from 'react-hot-toast';
 
 export default function Register() {
   const [name, setName] = useState('');
@@ -14,13 +15,34 @@ export default function Register() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    if (!name || !email || !password) {
+      toast.error('Please fill in all required fields.');
+      return;
+    }
+    
+    if (password.length < 6) {
+      toast.error('Password should be at least 6 characters.');
+      return;
+    }
+
     setIsLoading(true);
     
-    // Simulate network delay
-    await new Promise(resolve => setTimeout(resolve, 600));
-    
-    registerPatient({ name, email, phone });
-    navigate('/patient');
+    try {
+      const loggedInUser = await registerPatient({ name, email, phone, password });
+      toast.success('Account created successfully!');
+      navigate(`/${loggedInUser.role}`);
+    } catch (err: any) {
+      console.error("Registration failed:", err);
+      if (err.code === 'auth/email-already-in-use') {
+        toast.error("This email is already registered. Please sign in instead.");
+      } else if (err.code === 'auth/weak-password') {
+        toast.error("Password should be at least 6 characters.");
+      } else {
+        toast.error(err.message || "Registration failed. Please try again.");
+      }
+      setIsLoading(false);
+    }
   };
 
   return (

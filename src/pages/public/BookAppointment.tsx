@@ -1,10 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAppContext } from '../../context/AppContext';
-import { Calendar, Clock, User, Stethoscope, FileText, CheckCircle2, AlertCircle } from 'lucide-react';
+import { Calendar, Clock, User, Stethoscope, FileText, CheckCircle2, AlertCircle, Loader2 } from 'lucide-react';
+import toast from 'react-hot-toast';
 
 export default function BookAppointment() {
-  const { currentUser, users, departments, bookAppointment } = useAppContext();
+  const { currentUser, users, departments, bookAppointment, doctorSchedules, appointments } = useAppContext();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const preselectedDoctor = searchParams.get('doctor');
@@ -15,7 +16,7 @@ export default function BookAppointment() {
   const [time, setTime] = useState('');
   const [reason, setReason] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [error, setError] = useState('');
+  const [availableSlots, setAvailableSlots] = useState<string[]>([]);
 
   useEffect(() => {
     if (!currentUser) {
@@ -30,25 +31,122 @@ export default function BookAppointment() {
     }
   }, [preselectedDoctor, users]);
 
-  const doctors = users.filter(u => u.role === 'doctor' && (!departmentId || u.departmentId === departmentId));
+  const doctors = useMemo(() => {
+    return users.filter(u => u.role === 'doctor' && (!departmentId || u.departmentId === departmentId));
+  }, [users, departmentId]);
+
+  useEffect(() => {
+    if (!doctorId || !date) {
+      setAvailableSlots([]);
+      setTime('');
+      return;
+    }
+
+    const selectedDate = new Date(date);
+    const dayOfWeek = selectedDate.getDay(); // 0-6
+    
+    let schedule = doctorSchedules.find(s => s.doctorId === doctorId && s.dayOfWeek === dayOfWeek);
+    
+    if (!schedule) {
+      // Default schedule: Mon-Fri 09:00 to 17:00, 30 min slots
+      if (dayOfWeek >= 1 && dayOfWeek <= 5) {
+        schedule = {
+          id: 'default',
+          doctorId,
+          dayOfWeek,
+          startTime: '09:00',
+          endTime: '17:00',
+          slotDurationMinutes: 30
+        };
+      } else {
+        setAvailableSlots([]);
+        setTime('');
+        return;
+      }
+    }
+
+    // Generate slots
+    const slots: string[] = [];
+    const [startHour, startMin] = schedule.startTime.split(':').map(Number);
+    const [endHour, endMin] = schedule.endTime.split(':').map(Number);
+    
+    let currentHour = startHour;
+    let currentMin = startMin;
+    
+    const now = new Date();
+    const isToday = selectedDate.toDateString() === now.toDateString();
+    
+    while (currentHour < endHour || (currentHour === endHour && currentMin < endMin)) {
+      const timeString = `${currentHour.toString().padStart(2, '0')}:${currentMin.toString().padStart(2, '0')}`;
+      
+      // Check if slot is in the past (if today)
+      let isPast = false;
+      if (isToday) {
+        if (currentHour < now.getHours() || (currentHour === now.getHours() && currentMin <= now.getMinutes())) {
+          isPast = true;
+        }
+      }
+      
+      // Check if slot is already booked
+      const isBooked = appointments.some(a => 
+        a.doctorId === doctorId && 
+        a.date === date && 
+        a.time === timeString &&
+        a.status !== 'cancelled'
+      );
+      
+      if (!isPast && !isBooked) {
+        slots.push(timeString);
+      }
+      
+      currentMin += schedule.slotDurationMinutes;
+      if (currentMin >= 60) {
+        currentHour += Math.floor(currentMin / 60);
+        currentMin = currentMin % 60;
+      }
+    }
+    
+    setAvailableSlots(slots);
+    if (!slots.includes(time)) {
+      setTime('');
+    }
+  }, [doctorId, date, doctorSchedules, appointments, time]);
+
+  const formatTime = (timeStr: string) => {
+    const [h, m] = timeStr.split(':').map(Number);
+    const ampm = h >= 12 ? 'PM' : 'AM';
+    const hour12 = h % 12 || 12;
+    return `${hour12.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')} ${ampm}`;
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!currentUser) return;
 
     if (!departmentId || !doctorId || !date || !time || !reason) {
-      setError('Please fill in all required fields.');
+      toast.error('Please fill in all required fields.');
+      return;
+    }
+    
+    // Basic validation
+    if (reason.length < 10) {
+      toast.error('Please provide a more detailed reason for your visit (min 10 characters).');
+      return;
+    }
+    
+    const selectedDate = new Date(date);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    if (selectedDate < today) {
+      toast.error('Please select a future date for your appointment.');
       return;
     }
 
     setIsSubmitting(true);
-    setError('');
 
     try {
-      // Simulate API call delay
-      await new Promise(resolve => setTimeout(resolve, 800));
-      
-      bookAppointment({
+      await bookAppointment({
         patientId: currentUser.id,
         doctorId,
         departmentId,
@@ -58,7 +156,6 @@ export default function BookAppointment() {
       });
       navigate('/patient/appointments');
     } catch (err) {
-      setError('Failed to book appointment. Please try again.');
       setIsSubmitting(false);
     }
   };
@@ -199,16 +296,19 @@ export default function BookAppointment() {
                         required
                         value={time}
                         onChange={(e) => setTime(e.target.value)}
-                        className="block w-full pl-4 pr-10 py-3 text-base border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 rounded-xl bg-slate-50 focus:bg-white transition-colors appearance-none"
+                        disabled={!date || !doctorId || availableSlots.length === 0}
+                        className="block w-full pl-4 pr-10 py-3 text-base border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 rounded-xl bg-slate-50 focus:bg-white transition-colors appearance-none disabled:opacity-60 disabled:cursor-not-allowed"
                       >
-                        <option value="">Select Time</option>
-                        <option value="09:00">09:00 AM</option>
-                        <option value="10:00">10:00 AM</option>
-                        <option value="11:00">11:00 AM</option>
-                        <option value="13:00">01:00 PM</option>
-                        <option value="14:00">02:00 PM</option>
-                        <option value="15:00">03:00 PM</option>
-                        <option value="16:00">04:00 PM</option>
+                        <option value="">
+                          {!date || !doctorId 
+                            ? "Select Date & Doctor First" 
+                            : availableSlots.length === 0 
+                              ? "No slots available" 
+                              : "Select Time"}
+                        </option>
+                        {availableSlots.map(slot => (
+                          <option key={slot} value={slot}>{formatTime(slot)}</option>
+                        ))}
                       </select>
                       <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-slate-500">
                         <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>

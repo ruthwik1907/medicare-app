@@ -1,4 +1,14 @@
-import React, { createContext, useContext, useState, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { db, auth, secondaryAuth } from '../firebase';
+import { 
+  collection, doc, onSnapshot, setDoc, updateDoc, deleteDoc, 
+  query, where, getDoc, addDoc, getDocs 
+} from 'firebase/firestore';
+import { 
+  signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged 
+} from 'firebase/auth';
+import toast from 'react-hot-toast';
+import { sendAppointmentConfirmationEmail } from '../services/emailService';
 
 export type Role = 'patient' | 'doctor' | 'admin' | 'receptionist' | 'pharmacist' | 'lab_technician';
 
@@ -166,201 +176,323 @@ interface AppContextType {
   labRequests: LabRequest[];
   labReports: LabReport[];
   messages: Message[];
-  login: (email: string, role: Role) => void;
-  logout: () => void;
-  registerPatient: (data: Partial<User>) => void;
-  bookAppointment: (data: Omit<Appointment, 'id' | 'status'>) => void;
-  updateAppointmentStatus: (id: string, status: Appointment['status']) => void;
-  addMedicalRecord: (data: Omit<MedicalRecord, 'id' | 'date'>) => void;
-  addPrescription: (data: Omit<Prescription, 'id' | 'date' | 'status'>) => void;
-  dispensePrescription: (id: string, pharmacistId: string) => void;
-  addDoctor: (data: Partial<User>) => void;
-  addDepartment: (data: Omit<Department, 'id'>) => void;
-  generateInvoice: (data: Omit<Invoice, 'id' | 'status'>) => void;
-  payInvoice: (id: string, method: Invoice['paymentMethod'], transactionId?: string) => void;
-  sendMessage: (data: Omit<Message, 'id' | 'timestamp' | 'read'>) => void;
-  markMessageRead: (id: string) => void;
-  requestLabTest: (data: Omit<LabRequest, 'id' | 'date' | 'status'>) => void;
-  addLabReport: (data: Omit<LabReport, 'id' | 'date'>) => void;
-  updateLabReportStatus: (id: string, status: LabReport['status'], resultData?: string) => void;
+  isAuthReady: boolean;
+  login: (email: string, password?: string, role?: Role) => Promise<User>;
+  logout: () => Promise<void>;
+  registerPatient: (data: Partial<User> & { password?: string }) => Promise<User>;
+  bookAppointment: (data: Omit<Appointment, 'id' | 'status'>) => Promise<void>;
+  updateAppointmentStatus: (id: string, status: Appointment['status']) => Promise<void>;
+  addMedicalRecord: (data: Omit<MedicalRecord, 'id' | 'date'>) => Promise<void>;
+  addPrescription: (data: Omit<Prescription, 'id' | 'date' | 'status'>) => Promise<void>;
+  dispensePrescription: (id: string, pharmacistId: string) => Promise<void>;
+  addDoctor: (data: Partial<User>) => Promise<void>;
+  addDepartment: (data: Omit<Department, 'id'>) => Promise<void>;
+  generateInvoice: (data: Omit<Invoice, 'id' | 'status'>) => Promise<void>;
+  payInvoice: (id: string, method: Invoice['paymentMethod'], transactionId?: string) => Promise<void>;
+  sendMessage: (data: Omit<Message, 'id' | 'timestamp' | 'read'>) => Promise<void>;
+  markMessageRead: (id: string) => Promise<void>;
+  requestLabTest: (data: Omit<LabRequest, 'id' | 'date' | 'status'>) => Promise<void>;
+  addLabReport: (data: Omit<LabReport, 'id' | 'date'>) => Promise<void>;
+  updateLabReportStatus: (id: string, status: LabReport['status'], resultData?: string) => Promise<void>;
+  createAdminUser: (data: Partial<User> & { password?: string }) => Promise<void>;
+  updateAdminUser: (id: string, data: Partial<User>) => Promise<void>;
+  deleteUser: (id: string) => Promise<void>;
 }
-
-const defaultDepartments: Department[] = [
-  { id: 'd1', name: 'Cardiology', description: 'Heart and cardiovascular system' },
-  { id: 'd2', name: 'Neurology', description: 'Brain and nervous system' },
-  { id: 'd3', name: 'Pediatrics', description: 'Child and infant care' },
-  { id: 'd4', name: 'Orthopedics', description: 'Bones and muscles' },
-];
-
-const defaultUsers: User[] = [
-  { id: 'a1', name: 'Admin User', email: 'admin@hospital.com', role: 'admin' },
-  { id: 'rec1', name: 'Sarah Desk', email: 'reception@hospital.com', role: 'receptionist' },
-  { id: 'pharm1', name: 'John Pills', email: 'pharmacy@hospital.com', role: 'pharmacist' },
-  { id: 'lab1', name: 'Mike Tubes', email: 'lab@hospital.com', role: 'lab_technician' },
-  { id: 'doc1', name: 'Dr. Sarah Jenkins', email: 'sarah@hospital.com', role: 'doctor', departmentId: 'd1', specialty: 'Cardiologist', consultationFee: 150, avatar: 'https://picsum.photos/seed/doc1/200/200' },
-  { id: 'doc2', name: 'Dr. Michael Chen', email: 'michael@hospital.com', role: 'doctor', departmentId: 'd2', specialty: 'Neurologist', consultationFee: 200, avatar: 'https://picsum.photos/seed/doc2/200/200' },
-  { id: 'doc3', name: 'Dr. Emily White', email: 'emily@hospital.com', role: 'doctor', departmentId: 'd3', specialty: 'Pediatrician', consultationFee: 120, avatar: 'https://picsum.photos/seed/doc3/200/200' },
-  { id: 'p1', name: 'John Doe', email: 'john@example.com', role: 'patient', phone: '555-0101', mrn: 'MRN-2026-0001', dob: '1985-06-15', gender: 'male', bloodGroup: 'O+' },
-  { id: 'p2', name: 'Jane Smith', email: 'jane@example.com', role: 'patient', phone: '555-0102', mrn: 'MRN-2026-0002', dob: '1990-08-22', gender: 'female', bloodGroup: 'A-' },
-];
-
-const defaultSchedules: DoctorSchedule[] = [
-  { id: 'sch1', doctorId: 'doc1', dayOfWeek: 1, startTime: '09:00', endTime: '17:00', slotDurationMinutes: 30 },
-  { id: 'sch2', doctorId: 'doc1', dayOfWeek: 2, startTime: '09:00', endTime: '17:00', slotDurationMinutes: 30 },
-  { id: 'sch3', doctorId: 'doc1', dayOfWeek: 3, startTime: '09:00', endTime: '17:00', slotDurationMinutes: 30 },
-];
-
-const defaultAppointments: Appointment[] = [
-  { id: 'apt1', patientId: 'p1', doctorId: 'doc1', departmentId: 'd1', date: '2026-03-20', time: '10:00', status: 'confirmed', reason: 'Routine checkup' },
-  { id: 'apt2', patientId: 'p2', doctorId: 'doc2', departmentId: 'd2', date: '2026-03-21', time: '14:30', status: 'pending', reason: 'Headaches' },
-  { id: 'apt3', patientId: 'p1', doctorId: 'doc3', departmentId: 'd3', date: '2026-03-10', time: '09:00', status: 'completed', reason: 'Fever' },
-];
-
-const defaultMedicalRecords: MedicalRecord[] = [
-  {
-    id: 'emr1', patientId: 'p1', doctorId: 'doc3', appointmentId: 'apt3', date: '2026-03-10',
-    vitals: { bloodPressure: '120/80', heartRate: 72, temperature: 98.6, weight: 75, height: 180, oxygenLevel: 99 },
-    allergies: ['Penicillin'], pastMedicalHistory: 'None', diagnosis: 'Viral Fever', clinicalNotes: 'Patient presents with mild fever and fatigue.', followUpDate: '2026-03-17'
-  }
-];
-
-const defaultPrescriptions: Prescription[] = [
-  { 
-    id: 'rx1', patientId: 'p1', doctorId: 'doc3', appointmentId: 'apt3', date: '2026-03-10', status: 'pending',
-    items: [
-      { id: 'rxi1', medicationName: 'Paracetamol', dosage: '500mg', route: 'Oral', frequency: 'Twice daily', durationDays: 5, specialInstructions: 'Take after meals' }
-    ]
-  }
-];
-
-const defaultInvoices: Invoice[] = [
-  { 
-    id: 'inv1', patientId: 'p1', appointmentId: 'apt3', amount: 150.00, date: '2026-03-10', dueDate: '2026-03-24', status: 'paid', paymentMethod: 'card', transactionId: 'TXN12345',
-    items: [{ id: 'invi1', description: 'Consultation Fee - Dr. Emily White', amount: 150.00, type: 'consultation' }]
-  }
-];
-
-const defaultLabRequests: LabRequest[] = [
-  { id: 'req1', patientId: 'p1', doctorId: 'doc1', appointmentId: 'apt1', date: '2026-03-12', testName: 'Complete Blood Count (CBC)', status: 'completed' }
-];
-
-const defaultLabReports: LabReport[] = [
-  { id: 'lab1', labRequestId: 'req1', patientId: 'p1', doctorId: 'doc1', technicianId: 'lab1', date: '2026-03-12', testName: 'Complete Blood Count (CBC)', resultData: 'All parameters within normal range. Hemoglobin: 14.2 g/dL', status: 'completed' }
-];
-
-const defaultMessages: Message[] = [
-  { id: 'msg1', senderId: 'doc1', receiverId: 'p1', content: 'Hello John, your recent blood test results look good. No need to worry.', timestamp: '2026-03-13T10:30:00Z', read: false },
-];
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export const AppProvider = ({ children }: { children: ReactNode }) => {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
-  const [users, setUsers] = useState<User[]>(defaultUsers);
-  const [departments, setDepartments] = useState<Department[]>(defaultDepartments);
-  const [doctorSchedules, setDoctorSchedules] = useState<DoctorSchedule[]>(defaultSchedules);
-  const [appointments, setAppointments] = useState<Appointment[]>(defaultAppointments);
-  const [medicalRecords, setMedicalRecords] = useState<MedicalRecord[]>(defaultMedicalRecords);
-  const [prescriptions, setPrescriptions] = useState<Prescription[]>(defaultPrescriptions);
-  const [invoices, setInvoices] = useState<Invoice[]>(defaultInvoices);
-  const [labRequests, setLabRequests] = useState<LabRequest[]>(defaultLabRequests);
-  const [labReports, setLabReports] = useState<LabReport[]>(defaultLabReports);
-  const [messages, setMessages] = useState<Message[]>(defaultMessages);
+  const [users, setUsers] = useState<User[]>([]);
+  const [departments, setDepartments] = useState<Department[]>([]);
+  const [doctorSchedules, setDoctorSchedules] = useState<DoctorSchedule[]>([]);
+  const [appointments, setAppointments] = useState<Appointment[]>([]);
+  const [medicalRecords, setMedicalRecords] = useState<MedicalRecord[]>([]);
+  const [prescriptions, setPrescriptions] = useState<Prescription[]>([]);
+  const [invoices, setInvoices] = useState<Invoice[]>([]);
+  const [labRequests, setLabRequests] = useState<LabRequest[]>([]);
+  const [labReports, setLabReports] = useState<LabReport[]>([]);
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [isAuthReady, setIsAuthReady] = useState(false);
 
-  const login = (email: string, role: Role) => {
-    const user = users.find(u => u.email === email && u.role === role);
-    if (user) {
-      setCurrentUser(user);
-    } else {
-      const mockUser = users.find(u => u.role === role);
-      if (mockUser) setCurrentUser(mockUser);
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      if (user) {
+        const userDoc = await getDoc(doc(db, 'users', user.uid));
+        if (userDoc.exists()) {
+          setCurrentUser({ id: userDoc.id, ...userDoc.data() } as User);
+        }
+      } else {
+        setCurrentUser(null);
+      }
+      setIsAuthReady(true);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  useEffect(() => {
+    const unsubUsers = onSnapshot(collection(db, 'users'), (snapshot) => {
+      setUsers(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as User)));
+    });
+    const unsubDepts = onSnapshot(collection(db, 'departments'), (snapshot) => {
+      setDepartments(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Department)));
+    });
+
+    return () => {
+      unsubUsers(); unsubDepts();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!isAuthReady || !currentUser) return;
+
+    const unsubSchedules = onSnapshot(collection(db, 'doctorSchedules'), (snapshot) => {
+      setDoctorSchedules(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as DoctorSchedule)));
+    });
+    const unsubAppts = onSnapshot(collection(db, 'appointments'), (snapshot) => {
+      setAppointments(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Appointment)));
+    });
+    const unsubRecords = onSnapshot(collection(db, 'medicalRecords'), (snapshot) => {
+      setMedicalRecords(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as MedicalRecord)));
+    });
+    const unsubPrescriptions = onSnapshot(collection(db, 'prescriptions'), (snapshot) => {
+      setPrescriptions(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Prescription)));
+    });
+    const unsubInvoices = onSnapshot(collection(db, 'invoices'), (snapshot) => {
+      setInvoices(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Invoice)));
+    });
+    const unsubLabReqs = onSnapshot(collection(db, 'labRequests'), (snapshot) => {
+      setLabRequests(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as LabRequest)));
+    });
+    const unsubLabReps = onSnapshot(collection(db, 'labReports'), (snapshot) => {
+      setLabReports(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as LabReport)));
+    });
+    const unsubMessages = onSnapshot(collection(db, 'messages'), (snapshot) => {
+      setMessages(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Message)));
+    });
+
+    return () => {
+      unsubSchedules(); unsubAppts();
+      unsubRecords(); unsubPrescriptions(); unsubInvoices();
+      unsubLabReqs(); unsubLabReps(); unsubMessages();
+    };
+  }, [isAuthReady, currentUser]);
+
+  const login = async (email: string, password?: string, role?: Role) => {
+    try {
+      const result = await signInWithEmailAndPassword(auth, email, password || '123456');
+      const user = result.user;
+      
+      const userDoc = await getDoc(doc(db, 'users', user.uid));
+      if (!userDoc.exists()) {
+        const isAdminEmail = email === 'admin@hospital.com';
+        const newUser: User = {
+          id: user.uid,
+          name: user.displayName || email.split('@')[0],
+          email: user.email || email,
+          role: isAdminEmail ? 'admin' : (role || 'patient'),
+          avatar: user.photoURL || `https://picsum.photos/seed/${user.uid}/200/200`,
+        };
+        if (newUser.role === 'patient') {
+          newUser.mrn = `MRN-${new Date().getFullYear()}-${Math.floor(Math.random() * 10000).toString().padStart(4, '0')}`;
+        }
+        await setDoc(doc(db, 'users', user.uid), newUser);
+        setCurrentUser(newUser);
+        return newUser;
+      } else {
+        const existingUser = { id: userDoc.id, ...userDoc.data() } as User;
+        setCurrentUser(existingUser);
+        return existingUser;
+      }
+    } catch (error) {
+      console.error("Login failed:", error);
+      alert("Login failed. Please check your credentials or ensure you have enabled Email/Password authentication in Firebase.");
+      throw error;
     }
   };
 
-  const logout = () => setCurrentUser(null);
+  const logout = async () => {
+    await signOut(auth);
+    setCurrentUser(null);
+  };
 
-  const registerPatient = (data: Partial<User>) => {
-    const newUser: User = {
-      id: `p${Date.now()}`,
-      name: data.name || 'New Patient',
-      email: data.email || '',
-      role: 'patient',
-      phone: data.phone,
-      mrn: `MRN-${new Date().getFullYear()}-${String(users.filter(u => u.role === 'patient').length + 1).padStart(4, '0')}`,
-      ...data
+  const registerPatient = async (data: Partial<User> & { password?: string }) => {
+    try {
+      const result = await createUserWithEmailAndPassword(auth, data.email || '', data.password || '123456');
+      const user = result.user;
+      
+      const isAdminEmail = data.email === 'admin@hospital.com';
+      
+      const newUser: User = {
+        id: user.uid,
+        name: data.name || user.displayName || (isAdminEmail ? 'Admin' : 'New Patient'),
+        email: data.email || user.email || '',
+        phone: data.phone,
+        avatar: user.photoURL || `https://picsum.photos/seed/${user.uid}/200/200`,
+        ...data,
+        role: isAdminEmail ? 'admin' : 'patient', // Ensure role is not overwritten by ...data
+      };
+      
+      if (!isAdminEmail) {
+        newUser.mrn = `MRN-${new Date().getFullYear()}-${Math.floor(Math.random() * 10000).toString().padStart(4, '0')}`;
+      }
+      
+      // Remove password from the data saved to Firestore
+      delete (newUser as any).password;
+      
+      await setDoc(doc(db, 'users', user.uid), newUser);
+      setCurrentUser(newUser);
+      return newUser;
+    } catch (error: any) {
+      console.error("Registration failed:", error);
+      throw error;
+    }
+  };
+
+  const bookAppointment = async (data: Omit<Appointment, 'id' | 'status'>) => {
+    try {
+      const newApt = { ...data, status: 'pending' };
+      await addDoc(collection(db, 'appointments'), newApt);
+      
+      // Try to send email notification
+      const doctor = users.find(u => u.id === data.doctorId);
+      const department = departments.find(d => d.id === data.departmentId);
+      const patient = users.find(u => u.id === data.patientId);
+      
+      if (doctor && department && patient) {
+        try {
+          await sendAppointmentConfirmationEmail({
+            patient_name: patient.name,
+            patient_email: patient.email,
+            doctor_name: doctor.name,
+            department: department.name,
+            date: data.date,
+            time: data.time
+          });
+        } catch (emailError) {
+          console.error("Could not send email, but appointment was booked:", emailError);
+          // We don't throw here because the appointment was successfully booked
+        }
+      }
+      
+      toast.success('Appointment booked successfully!');
+    } catch (error) {
+      console.error("Error booking appointment:", error);
+      toast.error('Failed to book appointment. Please try again.');
+      throw error;
+    }
+  };
+
+  const updateAppointmentStatus = async (id: string, status: Appointment['status']) => {
+    await updateDoc(doc(db, 'appointments', id), { status });
+  };
+
+  const addMedicalRecord = async (data: Omit<MedicalRecord, 'id' | 'date'>) => {
+    const newRecord = { ...data, date: new Date().toISOString().split('T')[0] };
+    await addDoc(collection(db, 'medicalRecords'), newRecord);
+  };
+
+  const addPrescription = async (data: Omit<Prescription, 'id' | 'date' | 'status'>) => {
+    const newRx = { ...data, date: new Date().toISOString().split('T')[0], status: 'pending' };
+    await addDoc(collection(db, 'prescriptions'), newRx);
+  };
+
+  const dispensePrescription = async (id: string, pharmacistId: string) => {
+    await updateDoc(doc(db, 'prescriptions', id), { 
+      status: 'dispensed', 
+      dispensedBy: pharmacistId, 
+      dispensedAt: new Date().toISOString() 
+    });
+  };
+
+  const addDoctor = async (data: Partial<User>) => {
+    const newDoc = {
+      name: data.name || 'New Doctor', 
+      email: data.email || '', 
+      role: 'doctor',
+      departmentId: data.departmentId, 
+      specialty: data.specialty, 
+      avatar: `https://picsum.photos/seed/${Date.now()}/200/200`,
     };
-    setUsers([...users, newUser]);
-    setCurrentUser(newUser);
+    await addDoc(collection(db, 'users'), newDoc);
   };
 
-  const bookAppointment = (data: Omit<Appointment, 'id' | 'status'>) => {
-    const newApt: Appointment = { ...data, id: `apt${Date.now()}`, status: 'pending' };
-    setAppointments([...appointments, newApt]);
+  const addDepartment = async (data: Omit<Department, 'id'>) => {
+    await addDoc(collection(db, 'departments'), data);
   };
 
-  const updateAppointmentStatus = (id: string, status: Appointment['status']) => {
-    setAppointments(appointments.map(a => a.id === id ? { ...a, status } : a));
+  const generateInvoice = async (data: Omit<Invoice, 'id' | 'status'>) => {
+    const newInvoice = { ...data, status: 'unpaid' };
+    await addDoc(collection(db, 'invoices'), newInvoice);
   };
 
-  const addMedicalRecord = (data: Omit<MedicalRecord, 'id' | 'date'>) => {
-    const newRecord: MedicalRecord = { ...data, id: `emr${Date.now()}`, date: new Date().toISOString().split('T')[0] };
-    setMedicalRecords([...medicalRecords, newRecord]);
+  const payInvoice = async (id: string, method: Invoice['paymentMethod'], transactionId?: string) => {
+    await updateDoc(doc(db, 'invoices', id), { 
+      status: 'paid', 
+      paymentMethod: method, 
+      transactionId 
+    });
   };
 
-  const addPrescription = (data: Omit<Prescription, 'id' | 'date' | 'status'>) => {
-    const newRx: Prescription = { ...data, id: `rx${Date.now()}`, date: new Date().toISOString().split('T')[0], status: 'pending' };
-    setPrescriptions([...prescriptions, newRx]);
+  const sendMessage = async (data: Omit<Message, 'id' | 'timestamp' | 'read'>) => {
+    const newMsg = { ...data, timestamp: new Date().toISOString(), read: false };
+    await addDoc(collection(db, 'messages'), newMsg);
   };
 
-  const dispensePrescription = (id: string, pharmacistId: string) => {
-    setPrescriptions(prescriptions.map(p => p.id === id ? { ...p, status: 'dispensed', dispensedBy: pharmacistId, dispensedAt: new Date().toISOString() } : p));
+  const markMessageRead = async (id: string) => {
+    await updateDoc(doc(db, 'messages', id), { read: true });
   };
 
-  const addDoctor = (data: Partial<User>) => {
-    const newDoc: User = {
-      id: `doc${Date.now()}`, name: data.name || 'New Doctor', email: data.email || '', role: 'doctor',
-      departmentId: data.departmentId, specialty: data.specialty, avatar: `https://picsum.photos/seed/${Date.now()}/200/200`,
-    };
-    setUsers([...users, newDoc]);
+  const requestLabTest = async (data: Omit<LabRequest, 'id' | 'date' | 'status'>) => {
+    const newReq = { ...data, date: new Date().toISOString().split('T')[0], status: 'pending' };
+    await addDoc(collection(db, 'labRequests'), newReq);
   };
 
-  const addDepartment = (data: Omit<Department, 'id'>) => {
-    const newDept: Department = { ...data, id: `d${Date.now()}` };
-    setDepartments([...departments, newDept]);
+  const addLabReport = async (data: Omit<LabReport, 'id' | 'date'>) => {
+    const newReport = { ...data, date: new Date().toISOString().split('T')[0] };
+    await addDoc(collection(db, 'labReports'), newReport);
+    await updateDoc(doc(db, 'labRequests', data.labRequestId), { status: 'completed' });
   };
 
-  const generateInvoice = (data: Omit<Invoice, 'id' | 'status'>) => {
-    const newInvoice: Invoice = { ...data, id: `inv${Date.now()}`, status: 'unpaid' };
-    setInvoices([...invoices, newInvoice]);
+  const updateLabReportStatus = async (id: string, status: LabReport['status'], resultData?: string) => {
+    const updateData: any = { status };
+    if (resultData) updateData.resultData = resultData;
+    await updateDoc(doc(db, 'labReports', id), updateData);
   };
 
-  const payInvoice = (id: string, method: Invoice['paymentMethod'], transactionId?: string) => {
-    setInvoices(invoices.map(i => i.id === id ? { ...i, status: 'paid', paymentMethod: method, transactionId } : i));
+  const createAdminUser = async (data: Partial<User> & { password?: string }) => {
+    try {
+      const result = await createUserWithEmailAndPassword(secondaryAuth, data.email || '', data.password || '123456');
+      const user = result.user;
+      
+      const newUser: User = {
+        id: user.uid,
+        name: data.name || user.displayName || 'New Admin',
+        email: data.email || user.email || '',
+        role: 'admin',
+        phone: data.phone,
+        avatar: user.photoURL || `https://picsum.photos/seed/${user.uid}/200/200`,
+        ...data
+      };
+      // Remove password from the data saved to Firestore
+      delete (newUser as any).password;
+      
+      await setDoc(doc(db, 'users', user.uid), newUser);
+      // Sign out the secondary auth so it doesn't interfere
+      await signOut(secondaryAuth);
+    } catch (error) {
+      console.error("Admin registration failed:", error);
+      alert("Admin registration failed. Please ensure you have enabled Email/Password authentication in Firebase.");
+      throw error;
+    }
   };
 
-  const sendMessage = (data: Omit<Message, 'id' | 'timestamp' | 'read'>) => {
-    const newMsg: Message = { ...data, id: `msg${Date.now()}`, timestamp: new Date().toISOString(), read: false };
-    setMessages([...messages, newMsg]);
+  const updateAdminUser = async (id: string, data: Partial<User>) => {
+    await updateDoc(doc(db, 'users', id), data);
   };
 
-  const markMessageRead = (id: string) => {
-    setMessages(messages.map(m => m.id === id ? { ...m, read: true } : m));
-  };
-
-  const requestLabTest = (data: Omit<LabRequest, 'id' | 'date' | 'status'>) => {
-    const newReq: LabRequest = { ...data, id: `req${Date.now()}`, date: new Date().toISOString().split('T')[0], status: 'pending' };
-    setLabRequests([...labRequests, newReq]);
-  };
-
-  const addLabReport = (data: Omit<LabReport, 'id' | 'date'>) => {
-    const newReport: LabReport = { ...data, id: `lab${Date.now()}`, date: new Date().toISOString().split('T')[0] };
-    setLabReports([...labReports, newReport]);
-    // Update request status
-    setLabRequests(labRequests.map(r => r.id === data.labRequestId ? { ...r, status: 'completed' } : r));
-  };
-
-  const updateLabReportStatus = (id: string, status: LabReport['status'], resultData?: string) => {
-    setLabReports(labReports.map(l => l.id === id ? { ...l, status, ...(resultData ? { resultData } : {}) } : l));
+  const deleteUser = async (id: string) => {
+    await deleteDoc(doc(db, 'users', id));
   };
 
   return (
@@ -368,7 +500,8 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
       currentUser, users, departments, doctorSchedules, appointments, medicalRecords, prescriptions, invoices, labRequests, labReports, messages,
       login, logout, registerPatient, bookAppointment, updateAppointmentStatus, addMedicalRecord,
       addPrescription, dispensePrescription, addDoctor, addDepartment, generateInvoice, payInvoice,
-      sendMessage, markMessageRead, requestLabTest, addLabReport, updateLabReportStatus
+      sendMessage, markMessageRead, requestLabTest, addLabReport, updateLabReportStatus,
+      createAdminUser, updateAdminUser, deleteUser
     }}>
       {children}
     </AppContext.Provider>

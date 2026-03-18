@@ -9,6 +9,7 @@ import { AppProvider } from './context/AppContext';
 import { Navbar } from './components/layout/Navbar';
 import { Footer } from './components/layout/Footer';
 import { DashboardLayout } from './components/layout/DashboardLayout';
+import { Toaster } from 'react-hot-toast';
 
 // Public Pages
 import Home from './pages/public/Home';
@@ -49,6 +50,7 @@ import AdminSettings from './pages/admin/Settings';
 export default function App() {
   return (
     <AppProvider>
+      <Toaster position="top-right" />
       <Router>
         <Routes>
           {/* Public Routes */}

@@ -1,20 +1,35 @@
 import React, { useState } from 'react';
 import { useAppContext } from '../../context/AppContext';
-import { Plus, Edit, Trash2, Building, Users, Activity, MoreVertical } from 'lucide-react';
+import { Plus, Edit, Trash2, Building, Users, Activity, MoreVertical, Loader2 } from 'lucide-react';
+import toast from 'react-hot-toast';
 
 export default function AdminDepartments() {
   const { departments, addDepartment, users } = useAppContext();
   const [showAddModal, setShowAddModal] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
 
-  const handleAddDepartment = (e: React.FormEvent) => {
+  const handleAddDepartment = async (e: React.FormEvent) => {
     e.preventDefault();
-    addDepartment({ name, description });
-    setShowAddModal(false);
-    setName('');
-    setDescription('');
+    if (!name || !description) {
+      toast.error('Please fill in all required fields.');
+      return;
+    }
+    
+    setIsSubmitting(true);
+    try {
+      await addDepartment({ name, description });
+      toast.success('Department added successfully!');
+      setShowAddModal(false);
+      setName('');
+      setDescription('');
+    } catch (error) {
+      toast.error('Failed to add department. Please try again.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -112,9 +127,17 @@ export default function AdminDepartments() {
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 transition-colors"
+                  disabled={isSubmitting}
+                  className="px-4 py-2 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
                 >
-                  Save Department
+                  {isSubmitting ? (
+                    <>
+                      <Loader2 className="animate-spin -ml-1 mr-2 h-4 w-4" />
+                      Saving...
+                    </>
+                  ) : (
+                    'Save Department'
+                  )}
                 </button>
               </div>
             </form>

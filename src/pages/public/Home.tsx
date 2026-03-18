@@ -16,8 +16,8 @@ export default function Home() {
     <div className="min-h-screen bg-slate-50">
       {/* Hero Section */}
       <div className="relative bg-white overflow-hidden border-b border-slate-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 sm:py-16 lg:py-32 relative z-10 flex flex-col lg:flex-row items-center">
-          <div className="w-full lg:w-1/2 lg:pr-12 mb-12 lg:mb-0 text-center lg:text-left">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 sm:py-16 lg:py-24 relative z-10 flex flex-col lg:flex-row items-center justify-between">
+          <div className="w-full lg:w-5/12 mb-12 lg:mb-0 text-center lg:text-left">
             <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-indigo-50 text-indigo-600 text-sm font-bold mb-6 sm:mb-8 border border-indigo-100 shadow-sm">
               <Activity className="h-4 w-4" />
               <span>Modern Healthcare Platform</span>
@@ -51,7 +51,7 @@ export default function Home() {
             </div>
           </div>
           
-          <div className="w-full lg:w-1/2 relative">
+          <div className="w-full lg:w-6/12 relative">
             <div className="relative rounded-3xl overflow-hidden shadow-2xl border-4 sm:border-8 border-white">
               <img 
                 src="https://picsum.photos/seed/hero-hospital/1200/800" 

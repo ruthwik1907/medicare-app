@@ -19,21 +19,22 @@ export const Navbar = () => {
   return (
     <nav className="bg-white shadow-sm border-b border-slate-200 sticky top-0 z-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex justify-between h-16">
-          <div className="flex">
-            <Link to="/" className="flex-shrink-0 flex items-center gap-2 text-indigo-600" onClick={closeMenu}>
+        <div className="flex justify-between items-center h-16">
+          <div className="flex-shrink-0 flex items-center">
+            <Link to="/" className="flex items-center gap-2 text-indigo-600" onClick={closeMenu}>
               <Activity className="h-8 w-8" />
               <span className="font-bold text-xl tracking-tight text-slate-900">MediCare</span>
             </Link>
-            <div className="hidden sm:ml-8 sm:flex sm:space-x-8">
-              <Link to="/" className="border-transparent text-slate-500 hover:border-indigo-500 hover:text-indigo-700 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">Home</Link>
-              <Link to="/about" className="border-transparent text-slate-500 hover:border-indigo-500 hover:text-indigo-700 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">About / Departments</Link>
-              <Link to="/doctors" className="border-transparent text-slate-500 hover:border-indigo-500 hover:text-indigo-700 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">Doctors Directory</Link>
-            </div>
+          </div>
+          
+          <div className="hidden md:flex flex-1 justify-center space-x-8">
+            <Link to="/" className="border-transparent text-slate-500 hover:border-indigo-500 hover:text-indigo-700 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">Home</Link>
+            <Link to="/about" className="border-transparent text-slate-500 hover:border-indigo-500 hover:text-indigo-700 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">About / Departments</Link>
+            <Link to="/doctors" className="border-transparent text-slate-500 hover:border-indigo-500 hover:text-indigo-700 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">Doctors Directory</Link>
           </div>
           
           {/* Desktop Actions */}
-          <div className="hidden sm:ml-6 sm:flex sm:items-center space-x-4">
+          <div className="hidden md:flex items-center space-x-4">
             {!currentUser ? (
               <>
                 <Link to="/login" className="text-slate-500 hover:text-slate-900 px-3 py-2 rounded-md text-sm font-medium">Login</Link>
