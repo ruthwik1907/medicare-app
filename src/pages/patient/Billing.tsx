@@ -1,6 +1,9 @@
 import React, { useState } from 'react';
 import { useAppContext } from '../../context/AppContext';
 import { CreditCard, CheckCircle, Download, FileText, Search, Filter, AlertCircle, Calendar } from 'lucide-react';
+import jsPDF from 'jspdf';
+import 'jspdf-autotable';
+import toast from 'react-hot-toast';
 
 export default function PatientBilling() {
   const { currentUser, invoices, payInvoice } = useAppContext();
@@ -14,7 +17,7 @@ export default function PatientBilling() {
     .filter(i => {
       const searchMatch = 
         i.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        i.description.toLowerCase().includes(searchTerm.toLowerCase());
+        i.description?.toLowerCase().includes(searchTerm.toLowerCase());
       
       const statusMatch = statusFilter === 'all' || i.status === statusFilter;
       
@@ -25,6 +28,68 @@ export default function PatientBilling() {
   const totalUnpaid = myInvoices
     .filter(i => i.status === 'unpaid')
     .reduce((sum, invoice) => sum + invoice.amount, 0);
+
+  const downloadInvoicePDF = (invoice: any) => {
+    try {
+      const doc = new jsPDF();
+      
+      // Header
+      doc.setFontSize(20);
+      doc.setTextColor(30, 58, 138); // Indigo-900
+      doc.text('INVOICE', 14, 22);
+      
+      doc.setFontSize(10);
+      doc.setTextColor(100, 116, 139); // Slate-500
+      doc.text(`Invoice ID: #${invoice.id}`, 14, 30);
+      doc.text(`Date: ${new Date(invoice.date).toLocaleDateString()}`, 14, 35);
+      doc.text(`Due Date: ${new Date(invoice.dueDate).toLocaleDateString()}`, 14, 40);
+      doc.text(`Status: ${invoice.status.toUpperCase()}`, 14, 45);
+      
+      // Patient Info
+      doc.setFontSize(12);
+      doc.setTextColor(15, 23, 42); // Slate-900
+      doc.text('Billed To:', 14, 60);
+      doc.setFontSize(10);
+      doc.setTextColor(100, 116, 139);
+      doc.text(currentUser.name, 14, 65);
+      doc.text(currentUser.email, 14, 70);
+      if (currentUser.phone) doc.text(currentUser.phone, 14, 75);
+      
+      // Items Table
+      const tableColumn = ["Description", "Type", "Amount"];
+      const tableRows = invoice.items?.map((item: any) => [
+        item.description,
+        item.type,
+        `$${item.amount.toFixed(2)}`
+      ]) || [['Consultation Fee', 'consultation', `$${invoice.amount.toFixed(2)}`]];
+      
+      (doc as any).autoTable({
+        startY: 85,
+        head: [tableColumn],
+        body: tableRows,
+        theme: 'striped',
+        headStyles: { fillColor: [79, 70, 229] }, // Indigo-600
+        styles: { fontSize: 10, cellPadding: 5 },
+      });
+      
+      // Total
+      const finalY = (doc as any).lastAutoTable.finalY || 85;
+      doc.setFontSize(12);
+      doc.setTextColor(15, 23, 42);
+      doc.text(`Total Amount: $${invoice.amount.toFixed(2)}`, 14, finalY + 15);
+      
+      // Footer
+      doc.setFontSize(10);
+      doc.setTextColor(100, 116, 139);
+      doc.text('Thank you for your business.', 14, finalY + 35);
+      
+      doc.save(`Invoice_${invoice.id}.pdf`);
+      toast.success('Invoice downloaded successfully');
+    } catch (error) {
+      console.error('Error generating PDF:', error);
+      toast.error('Failed to generate PDF');
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -148,7 +213,11 @@ export default function PatientBilling() {
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                     <div className="flex items-center justify-end gap-2">
-                      <button className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors opacity-0 group-hover:opacity-100">
+                      <button 
+                        onClick={() => downloadInvoicePDF(invoice)}
+                        className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
+                        title="Download PDF"
+                      >
                         <Download className="h-4 w-4" />
                       </button>
                       {invoice.status === 'unpaid' ? (

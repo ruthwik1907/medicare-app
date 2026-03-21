@@ -1,12 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAppContext } from '../../context/AppContext';
 import { Calendar as CalendarIcon, Clock, CheckCircle, XCircle, AlertCircle, Save } from 'lucide-react';
+import toast from 'react-hot-toast';
 
 export default function DoctorSchedule() {
-  const { currentUser } = useAppContext();
+  const { currentUser, doctorSchedules, updateDoctorSchedule } = useAppContext();
   
-  // Mock schedule data
-  const [schedule, setSchedule] = useState([
+  const defaultSchedule = [
     { day: 'Monday', isWorking: true, start: '09:00', end: '17:00', breakStart: '13:00', breakEnd: '14:00' },
     { day: 'Tuesday', isWorking: true, start: '09:00', end: '17:00', breakStart: '13:00', breakEnd: '14:00' },
     { day: 'Wednesday', isWorking: true, start: '09:00', end: '17:00', breakStart: '13:00', breakEnd: '14:00' },
@@ -14,10 +14,35 @@ export default function DoctorSchedule() {
     { day: 'Friday', isWorking: true, start: '09:00', end: '15:00', breakStart: '12:00', breakEnd: '13:00' },
     { day: 'Saturday', isWorking: false, start: '10:00', end: '14:00', breakStart: '', breakEnd: '' },
     { day: 'Sunday', isWorking: false, start: '10:00', end: '14:00', breakStart: '', breakEnd: '' },
-  ]);
+  ];
 
+  const [schedule, setSchedule] = useState(defaultSchedule);
   const [isSaving, setIsSaving] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
+
+  useEffect(() => {
+    if (currentUser) {
+      const mySchedules = doctorSchedules.filter(s => s.doctorId === currentUser.id);
+      if (mySchedules.length > 0) {
+        // Map the existing schedules to our local state format
+        const loadedSchedule = defaultSchedule.map(defaultDay => {
+          const existingDay = mySchedules.find(s => s.dayOfWeek === defaultDay.day);
+          if (existingDay) {
+            return {
+              day: defaultDay.day,
+              isWorking: existingDay.isWorking,
+              start: existingDay.startTime,
+              end: existingDay.endTime,
+              breakStart: existingDay.breakStart || '',
+              breakEnd: existingDay.breakEnd || ''
+            };
+          }
+          return defaultDay;
+        });
+        setSchedule(loadedSchedule);
+      }
+    }
+  }, [currentUser, doctorSchedules]);
 
   if (!currentUser) return null;
 
@@ -33,14 +58,29 @@ export default function DoctorSchedule() {
     setSchedule(newSchedule);
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     setIsSaving(true);
-    // Simulate API call
-    setTimeout(() => {
-      setIsSaving(false);
+    try {
+      const schedulesToSave = schedule.map(day => ({
+        doctorId: currentUser.id,
+        dayOfWeek: day.day,
+        startTime: day.start,
+        endTime: day.end,
+        isWorking: day.isWorking,
+        breakStart: day.breakStart || undefined,
+        breakEnd: day.breakEnd || undefined,
+      }));
+      
+      await updateDoctorSchedule(currentUser.id, schedulesToSave);
       setShowSuccess(true);
       setTimeout(() => setShowSuccess(false), 3000);
-    }, 800);
+      toast.success('Schedule updated successfully');
+    } catch (error) {
+      console.error('Error saving schedule:', error);
+      toast.error('Failed to save schedule');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (

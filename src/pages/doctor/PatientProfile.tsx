@@ -2,16 +2,21 @@ import React, { useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useAppContext } from '../../context/AppContext';
 import { ArrowLeft, Plus, FileText, Calendar, Mail, Phone, Clock, CheckCircle, Activity, Pill, User as UserIcon, X } from 'lucide-react';
+import toast from 'react-hot-toast';
 
 export default function DoctorPatientProfile() {
   const { id } = useParams<{ id: string }>();
-  const { currentUser, users, appointments, prescriptions, addPrescription, updateAppointmentStatus } = useAppContext();
+  const { currentUser, users, appointments, prescriptions, labReports, addPrescription, updateAppointmentStatus, uploadLabReport } = useAppContext();
   const navigate = useNavigate();
   
   const [showPrescriptionModal, setShowPrescriptionModal] = useState(false);
+  const [showLabReportModal, setShowLabReportModal] = useState(false);
   const [selectedAptId, setSelectedAptId] = useState('');
   const [medications, setMedications] = useState('');
   const [notes, setNotes] = useState('');
+  const [testName, setTestName] = useState('');
+  const [labReportFile, setLabReportFile] = useState<File | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
 
   if (!currentUser) return null;
 
@@ -38,27 +43,53 @@ export default function DoctorPatientProfile() {
 
   const patientApts = appointments.filter(a => a.patientId === patient.id && a.doctorId === currentUser.id).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   const patientPrescriptions = prescriptions.filter(p => p.patientId === patient.id && p.doctorId === currentUser.id).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  const patientLabReports = labReports?.filter(r => r.patientId === patient.id && r.doctorId === currentUser.id).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()) || [];
 
-  const handleAddPrescription = (e: React.FormEvent) => {
+  const handleAddPrescription = async (e: React.FormEvent) => {
     e.preventDefault();
-    addPrescription({
-      patientId: patient.id,
-      doctorId: currentUser.id,
-      appointmentId: selectedAptId,
-      medications,
-      notes
-    });
-    
-    // Auto complete the appointment if it's not already
-    const apt = appointments.find(a => a.id === selectedAptId);
-    if (apt && apt.status !== 'completed') {
-      updateAppointmentStatus(selectedAptId, 'completed');
-    }
+    try {
+      await addPrescription({
+        patientId: patient.id,
+        doctorId: currentUser.id,
+        appointmentId: selectedAptId,
+        medications,
+        notes
+      });
+      
+      // Auto complete the appointment if it's not already
+      const apt = appointments.find(a => a.id === selectedAptId);
+      if (apt && apt.status !== 'completed') {
+        await updateAppointmentStatus(selectedAptId, 'completed');
+      }
 
-    setShowPrescriptionModal(false);
-    setMedications('');
-    setNotes('');
-    setSelectedAptId('');
+      setShowPrescriptionModal(false);
+      setMedications('');
+      setNotes('');
+      setSelectedAptId('');
+      toast.success('Prescription added successfully');
+    } catch (error) {
+      toast.error('Failed to add prescription');
+    }
+  };
+
+  const handleAddLabReport = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!labReportFile) {
+      toast.error('Please select a file to upload');
+      return;
+    }
+    
+    setIsUploading(true);
+    try {
+      await uploadLabReport(labReportFile, patient.id, currentUser.id, testName);
+      setShowLabReportModal(false);
+      setTestName('');
+      setLabReportFile(null);
+    } catch (error) {
+      // Error is handled in context
+    } finally {
+      setIsUploading(false);
+    }
   };
 
   const getStatusColor = (status: string) => {
@@ -90,13 +121,13 @@ export default function DoctorPatientProfile() {
         <div className="flex items-center gap-6">
           <div className="h-24 w-24 rounded-full overflow-hidden border-4 border-white shadow-lg flex-shrink-0">
             <img 
-              src={patient.avatar || `https://ui-avatars.com/api/?name=${patient.name}&background=random`} 
-              alt={patient.name} 
+              src={patient.avatar || `https://ui-avatars.com/api/?name=${patient.name || 'Patient'}&background=random`} 
+              alt={patient.name || 'Patient'} 
               className="h-full w-full object-cover"
             />
           </div>
           <div>
-            <h2 className="text-2xl font-bold text-slate-900 mb-2">{patient.name}</h2>
+            <h2 className="text-2xl font-bold text-slate-900 mb-2">{patient.name || 'Unknown Patient'}</h2>
             <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-6 text-sm text-slate-600">
               <div className="flex items-center gap-2">
                 <Mail className="h-4 w-4 text-slate-400" />
@@ -114,16 +145,25 @@ export default function DoctorPatientProfile() {
             </div>
           </div>
         </div>
-        <button 
-          onClick={() => setShowPrescriptionModal(true)}
-          className="w-full md:w-auto inline-flex items-center justify-center px-5 py-2.5 border border-transparent text-sm font-medium rounded-xl text-white bg-indigo-600 hover:bg-indigo-700 shadow-sm transition-colors"
-        >
-          <Plus className="h-4 w-4 mr-2" />
-          Add Prescription
-        </button>
+        <div className="flex flex-col md:flex-row gap-3 w-full md:w-auto">
+          <button 
+            onClick={() => setShowLabReportModal(true)}
+            className="w-full md:w-auto inline-flex items-center justify-center px-5 py-2.5 border border-slate-200 text-sm font-medium rounded-xl text-slate-700 bg-white hover:bg-slate-50 shadow-sm transition-colors"
+          >
+            <Activity className="h-4 w-4 mr-2" />
+            Upload Lab Report
+          </button>
+          <button 
+            onClick={() => setShowPrescriptionModal(true)}
+            className="w-full md:w-auto inline-flex items-center justify-center px-5 py-2.5 border border-transparent text-sm font-medium rounded-xl text-white bg-indigo-600 hover:bg-indigo-700 shadow-sm transition-colors"
+          >
+            <Plus className="h-4 w-4 mr-2" />
+            Add Prescription
+          </button>
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Appointments History */}
         <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden flex flex-col">
           <div className="p-6 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
@@ -243,6 +283,68 @@ export default function DoctorPatientProfile() {
             )}
           </div>
         </div>
+
+        {/* Lab Reports History */}
+        <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden flex flex-col">
+          <div className="p-6 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
+            <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+              <Activity className="h-5 w-5 text-blue-500" />
+              Lab Reports
+            </h2>
+            <span className="bg-blue-100 text-blue-700 text-xs font-bold px-2.5 py-1 rounded-full">
+              {patientLabReports.length} Total
+            </span>
+          </div>
+          <div className="divide-y divide-slate-100 flex-1 overflow-y-auto max-h-[600px]">
+            {patientLabReports.map(report => (
+              <div key={report.id} className="p-6 hover:bg-slate-50 transition-colors">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-2">
+                    <Calendar className="h-4 w-4 text-slate-400" />
+                    <p className="text-sm font-medium text-slate-700">
+                      {new Date(report.date).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}
+                    </p>
+                  </div>
+                  <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ring-1 ring-inset capitalize ${
+                    report.status === 'completed' ? 'bg-emerald-50 text-emerald-700 ring-emerald-600/20' : 'bg-amber-50 text-amber-700 ring-amber-600/20'
+                  }`}>
+                    {report.status}
+                  </span>
+                </div>
+                
+                <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-4">
+                  <div>
+                    <h4 className="text-sm font-bold text-slate-900 mb-1">
+                      {report.testName}
+                    </h4>
+                  </div>
+                  
+                  {report.resultData && (
+                    <div className="pt-4 border-t border-slate-100">
+                      <a 
+                        href={report.resultData} 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center px-4 py-2 border border-slate-200 text-sm font-medium rounded-lg text-indigo-600 bg-white hover:bg-slate-50 shadow-sm transition-colors"
+                      >
+                        <FileText className="h-4 w-4 mr-2" />
+                        View PDF Report
+                      </a>
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))}
+            {patientLabReports.length === 0 && (
+              <div className="p-12 text-center flex flex-col items-center justify-center h-full">
+                <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mb-4">
+                  <Activity className="h-8 w-8 text-slate-300" />
+                </div>
+                <p className="text-slate-500 font-medium">No lab reports found.</p>
+              </div>
+            )}
+          </div>
+        </div>
       </div>
 
       {/* Add Prescription Modal */}
@@ -315,6 +417,71 @@ export default function DoctorPatientProfile() {
                 >
                   <CheckCircle className="h-4 w-4 mr-2" />
                   Save Prescription
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+      {/* Add Lab Report Modal */}
+      {showLabReportModal && (
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-xl max-w-lg w-full overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+            <div className="p-6 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
+              <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+                <Activity className="h-5 w-5 text-indigo-600" />
+                Upload Lab Report
+              </h3>
+              <button 
+                onClick={() => setShowLabReportModal(false)}
+                className="text-slate-400 hover:text-slate-600 p-1 rounded-lg hover:bg-slate-100 transition-colors"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <form onSubmit={handleAddLabReport} className="p-6 space-y-5">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1.5">Test Name</label>
+                <input
+                  type="text"
+                  required
+                  value={testName}
+                  onChange={(e) => setTestName(e.target.value)}
+                  className="block w-full border border-slate-300 rounded-xl px-4 py-2.5 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent sm:text-sm"
+                  placeholder="e.g. Complete Blood Count (CBC)"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1.5">Upload PDF Report</label>
+                <input
+                  type="file"
+                  required
+                  accept="application/pdf"
+                  onChange={(e) => setLabReportFile(e.target.files?.[0] || null)}
+                  className="block w-full text-sm text-slate-500
+                    file:mr-4 file:py-2 file:px-4
+                    file:rounded-full file:border-0
+                    file:text-sm file:font-semibold
+                    file:bg-indigo-50 file:text-indigo-700
+                    hover:file:bg-indigo-100"
+                />
+              </div>
+              
+              <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setShowLabReportModal(false)}
+                  className="px-5 py-2.5 border border-slate-300 rounded-xl text-sm font-medium text-slate-700 bg-white hover:bg-slate-50 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isUploading}
+                  className="px-5 py-2.5 border border-transparent rounded-xl shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 transition-colors flex items-center disabled:opacity-50"
+                >
+                  {isUploading ? 'Uploading...' : 'Upload Report'}
                 </button>
               </div>
             </form>

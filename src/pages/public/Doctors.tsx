@@ -63,13 +63,13 @@ export default function Doctors() {
                 <div className="p-6 flex-1 flex flex-col items-center text-center">
                   <div className="relative mb-4">
                     <img 
-                      src={doc.avatar || `https://ui-avatars.com/api/?name=${doc.name}&background=random`} 
-                      alt={doc.name} 
+                      src={doc.avatar || `https://ui-avatars.com/api/?name=${doc.name || 'Doctor'}&background=random`} 
+                      alt={doc.name || 'Doctor'} 
                       className="w-24 h-24 rounded-full object-cover border-4 border-white shadow-md group-hover:scale-105 transition-transform duration-300" 
                     />
                     <div className="absolute bottom-0 right-0 bg-emerald-500 w-4 h-4 rounded-full border-2 border-white" title="Available"></div>
                   </div>
-                  <h3 className="text-lg font-bold text-slate-900 mb-1">{doc.name}</h3>
+                  <h3 className="text-lg font-bold text-slate-900 mb-1">{doc.name || 'Unknown Doctor'}</h3>
                   <p className="text-indigo-600 font-medium text-sm mb-3">{doc.specialty || 'General Practice'}</p>
                   
                   <div className="flex items-center gap-1 text-sm text-slate-500 mb-4 bg-slate-50 px-3 py-1 rounded-full">

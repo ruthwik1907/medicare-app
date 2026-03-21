@@ -1,12 +1,14 @@
 import React, { useState } from 'react';
 import { useAppContext } from '../../context/AppContext';
 import { Settings as SettingsIcon, User, Bell, Shield, Key, Smartphone, Mail, Save, Building, Globe, Database, Users, Plus, Edit2, Trash2 } from 'lucide-react';
+import toast from 'react-hot-toast';
 
 export default function AdminSettings() {
   const { currentUser, users, createAdminUser, updateAdminUser, deleteUser } = useAppContext();
   const [activeTab, setActiveTab] = useState('general');
   const [showAddAdmin, setShowAddAdmin] = useState(false);
   const [newAdmin, setNewAdmin] = useState({ name: '', email: '', password: '', phone: '' });
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const admins = users.filter(u => u.role === 'admin');
 
@@ -16,20 +18,23 @@ export default function AdminSettings() {
       await createAdminUser(newAdmin);
       setShowAddAdmin(false);
       setNewAdmin({ name: '', email: '', password: '', phone: '' });
-      alert('Admin created successfully');
+      toast.success('Admin created successfully');
     } catch (error) {
       console.error(error);
+      toast.error('Failed to create admin');
     }
   };
 
-  const handleDeleteAdmin = async (id: string) => {
-    if (window.confirm('Are you sure you want to delete this admin?')) {
-      try {
-        await deleteUser(id);
-      } catch (error) {
-        console.error(error);
-        alert('Failed to delete admin');
-      }
+  const handleDeleteAdmin = async () => {
+    if (!deletingId) return;
+    try {
+      await deleteUser(deletingId);
+      toast.success('Admin deleted successfully!');
+    } catch (error) {
+      console.error(error);
+      toast.error('Failed to delete admin');
+    } finally {
+      setDeletingId(null);
     }
   };
 
@@ -415,7 +420,7 @@ export default function AdminSettings() {
                             </button>
                             {currentUser?.id !== admin.id && (
                               <button 
-                                onClick={() => handleDeleteAdmin(admin.id)}
+                                onClick={() => setDeletingId(admin.id)}
                                 className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                               >
                                 <Trash2 className="w-4 h-4" />
@@ -455,6 +460,34 @@ export default function AdminSettings() {
           )}
         </div>
       </div>
+
+      {deletingId && (
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-xl max-w-sm w-full overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+            <div className="p-6">
+              <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center mb-4 mx-auto">
+                <Trash2 className="h-6 w-6 text-red-600" />
+              </div>
+              <h3 className="text-xl font-bold text-slate-900 text-center mb-2">Delete Administrator?</h3>
+              <p className="text-sm text-slate-500 text-center">Are you sure you want to delete this admin? This action cannot be undone.</p>
+              <div className="flex gap-3 mt-6">
+                <button
+                  onClick={() => setDeletingId(null)}
+                  className="flex-1 px-4 py-2 border border-slate-200 rounded-lg text-sm font-medium text-slate-700 bg-white hover:bg-slate-50 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleDeleteAdmin}
+                  className="flex-1 px-4 py-2 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-red-600 hover:bg-red-700 transition-colors"
+                >
+                  Delete
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

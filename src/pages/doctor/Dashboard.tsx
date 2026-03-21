@@ -98,9 +98,9 @@ export default function DoctorDashboard() {
                         {apt.time}
                       </div>
                       <div className="flex items-center gap-3">
-                        <img src={patient?.avatar || `https://ui-avatars.com/api/?name=${patient?.name}&background=random`} alt={patient?.name} className="w-10 h-10 rounded-full object-cover border border-slate-200" />
+                        <img src={patient?.avatar || `https://ui-avatars.com/api/?name=${patient?.name || 'Patient'}&background=random`} alt={patient?.name || 'Patient'} className="w-10 h-10 rounded-full object-cover border border-slate-200" />
                         <div>
-                          <p className="font-bold text-slate-900">{patient?.name}</p>
+                          <p className="font-bold text-slate-900">{patient?.name || 'Unknown Patient'}</p>
                           <p className="text-sm text-slate-500 truncate max-w-[200px]">{apt.reason}</p>
                         </div>
                       </div>
@@ -116,7 +116,7 @@ export default function DoctorDashboard() {
                          <Clock className="h-3.5 w-3.5" />}
                         <span className="capitalize">{apt.status}</span>
                       </span>
-                      <Link to={`/doctor/patients/${patient?.id}`} className="text-sm font-medium text-indigo-600 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100 px-4 py-2 rounded-lg transition-colors">
+                      <Link to={`/doctor/patients/${patient?.id || ''}`} className="text-sm font-medium text-indigo-600 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100 px-4 py-2 rounded-lg transition-colors">
                         View Profile
                       </Link>
                     </div>
@@ -152,10 +152,10 @@ export default function DoctorDashboard() {
                 return (
                   <div key={msg.id} className={`p-5 hover:bg-slate-50 transition-colors ${!msg.read ? 'bg-blue-50/30' : ''}`}>
                     <div className="flex items-start gap-3">
-                      <img src={sender?.avatar || `https://ui-avatars.com/api/?name=${sender?.name}&background=random`} alt={sender?.name} className="w-8 h-8 rounded-full object-cover border border-slate-200 mt-1" />
+                      <img src={sender?.avatar || `https://ui-avatars.com/api/?name=${sender?.name || 'User'}&background=random`} alt={sender?.name || 'User'} className="w-8 h-8 rounded-full object-cover border border-slate-200 mt-1" />
                       <div className="flex-1 min-w-0">
                         <div className="flex justify-between items-baseline mb-1">
-                          <p className={`text-sm font-medium truncate ${!msg.read ? 'text-slate-900' : 'text-slate-700'}`}>{sender?.name}</p>
+                          <p className={`text-sm font-medium truncate ${!msg.read ? 'text-slate-900' : 'text-slate-700'}`}>{sender?.name || 'Unknown User'}</p>
                           <p className="text-xs text-slate-400 shrink-0 ml-2">
                             {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                           </p>

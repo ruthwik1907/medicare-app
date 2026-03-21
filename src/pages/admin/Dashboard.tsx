@@ -108,12 +108,20 @@ export default function AdminDashboard() {
             {appointments.slice(-5).reverse().map(apt => {
               const patient = users.find(u => u.id === apt.patientId);
               const doctor = users.find(u => u.id === apt.doctorId);
+              
+              // Safely extract doctor's last name or fallback
+              let doctorDisplayName = 'Unknown';
+              if (doctor && doctor.name) {
+                const nameParts = doctor.name.split(' ');
+                doctorDisplayName = nameParts.length > 1 ? nameParts[1] : doctor.name;
+              }
+
               return (
                 <div key={apt.id} className="p-5 flex items-center justify-between hover:bg-slate-50 transition-colors">
                   <div className="flex items-center gap-4">
-                    <img src={patient?.avatar || `https://ui-avatars.com/api/?name=${patient?.name}&background=random`} alt={patient?.name} className="w-10 h-10 rounded-full object-cover border border-slate-200 hidden sm:block" />
+                    <img src={patient?.avatar || `https://ui-avatars.com/api/?name=${patient?.name || 'Patient'}&background=random`} alt={patient?.name || 'Patient'} className="w-10 h-10 rounded-full object-cover border border-slate-200 hidden sm:block" />
                     <div>
-                      <p className="font-semibold text-slate-900">{patient?.name} <span className="text-slate-400 font-normal mx-1">with</span> Dr. {doctor?.name.split(' ')[1] || doctor?.name}</p>
+                      <p className="font-semibold text-slate-900">{patient?.name || 'Unknown Patient'} <span className="text-slate-400 font-normal mx-1">with</span> Dr. {doctorDisplayName}</p>
                       <div className="flex items-center gap-3 mt-1 text-sm text-slate-500">
                         <span className="flex items-center gap-1"><Calendar className="h-3.5 w-3.5" /> {apt.date}</span>
                         <span className="flex items-center gap-1"><Clock className="h-3.5 w-3.5" /> {apt.time}</span>

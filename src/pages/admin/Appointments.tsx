@@ -88,15 +88,21 @@ export default function AdminAppointments() {
                 const patient = users.find(u => u.id === apt.patientId);
                 const doctor = users.find(u => u.id === apt.doctorId);
                 
+                let doctorDisplayName = 'Unknown';
+                if (doctor && doctor.name) {
+                  const nameParts = doctor.name.split(' ');
+                  doctorDisplayName = nameParts.length > 1 ? nameParts[1] : doctor.name;
+                }
+                
                 return (
                   <tr key={apt.id} className="hover:bg-slate-50/80 transition-colors group">
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="flex items-center">
                         <div className="flex-shrink-0 h-10 w-10">
-                          <img className="h-10 w-10 rounded-full object-cover border border-slate-200" src={patient?.avatar || `https://ui-avatars.com/api/?name=${patient?.name}&background=random`} alt="" />
+                          <img className="h-10 w-10 rounded-full object-cover border border-slate-200" src={patient?.avatar || `https://ui-avatars.com/api/?name=${patient?.name || 'Patient'}&background=random`} alt="" />
                         </div>
                         <div className="ml-4">
-                          <div className="text-sm font-bold text-slate-900">{patient?.name}</div>
+                          <div className="text-sm font-bold text-slate-900">{patient?.name || 'Unknown Patient'}</div>
                           <div className="text-xs text-slate-500 mt-0.5">{patient?.email}</div>
                         </div>
                       </div>
@@ -104,11 +110,11 @@ export default function AdminAppointments() {
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="flex items-center">
                         <div className="flex-shrink-0 h-8 w-8">
-                          <img className="h-8 w-8 rounded-full object-cover border border-slate-200" src={doctor?.avatar || `https://ui-avatars.com/api/?name=${doctor?.name}&background=random`} alt="" />
+                          <img className="h-8 w-8 rounded-full object-cover border border-slate-200" src={doctor?.avatar || `https://ui-avatars.com/api/?name=${doctor?.name || 'Doctor'}&background=random`} alt="" />
                         </div>
                         <div className="ml-3">
-                          <div className="text-sm font-bold text-slate-900">Dr. {doctor?.name.split(' ')[1] || doctor?.name}</div>
-                          <div className="text-xs text-slate-500 mt-0.5">{doctor?.specialty}</div>
+                          <div className="text-sm font-bold text-slate-900">Dr. {doctorDisplayName}</div>
+                          <div className="text-xs text-slate-500 mt-0.5">{doctor?.specialty || 'Unknown Specialty'}</div>
                         </div>
                       </div>
                     </td>

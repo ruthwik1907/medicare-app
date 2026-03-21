@@ -1,16 +1,21 @@
 import React, { useState } from 'react';
 import { useAppContext } from '../../context/AppContext';
-import { Plus, Search, Edit, Trash2, Mail, Phone, Building, Star, MoreVertical, Loader2 } from 'lucide-react';
+import { Plus, Search, Edit, Trash2, Mail, Phone, Building, Star, MoreVertical, Loader2, X } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { User } from '../../context/AppContext';
 
 export default function AdminDoctors() {
-  const { users, departments, addDoctor } = useAppContext();
+  const { users, departments, addDoctor, updateAdminUser, deleteUser } = useAppContext();
   const [searchTerm, setSearchTerm] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [editingDoctor, setEditingDoctor] = useState<User | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [departmentId, setDepartmentId] = useState('');
   const [specialty, setSpecialty] = useState('');
 
@@ -24,6 +29,38 @@ export default function AdminDoctors() {
 
   const handleAddDoctor = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!name || !email || !password || !departmentId || !specialty) {
+      toast.error('Please fill in all required fields.');
+      return;
+    }
+    
+    setIsSubmitting(true);
+    try {
+      await addDoctor({ name, email, password, departmentId, specialty });
+      toast.success('Doctor added successfully!');
+      setShowAddModal(false);
+      resetForm();
+    } catch (error) {
+      toast.error('Failed to add doctor. Please try again.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleEditClick = (doctor: User) => {
+    setEditingDoctor(doctor);
+    setName(doctor.name);
+    setEmail(doctor.email);
+    setDepartmentId(doctor.departmentId || '');
+    setSpecialty(doctor.specialty || '');
+    setPassword(''); // Don't populate password
+    setShowEditModal(true);
+  };
+
+  const handleUpdateDoctor = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingDoctor) return;
+    
     if (!name || !email || !departmentId || !specialty) {
       toast.error('Please fill in all required fields.');
       return;
@@ -31,18 +68,43 @@ export default function AdminDoctors() {
     
     setIsSubmitting(true);
     try {
-      await addDoctor({ name, email, departmentId, specialty });
-      toast.success('Doctor added successfully!');
-      setShowAddModal(false);
-      setName('');
-      setEmail('');
-      setDepartmentId('');
-      setSpecialty('');
+      await updateAdminUser(editingDoctor.id, {
+        name,
+        email,
+        departmentId,
+        specialty
+      });
+      toast.success('Doctor updated successfully!');
+      setShowEditModal(false);
+      resetForm();
     } catch (error) {
-      toast.error('Failed to add doctor. Please try again.');
+      console.error('Update doctor error:', error);
+      toast.error('Failed to update doctor.');
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  const handleDeleteDoctor = async () => {
+    if (!deletingId) return;
+    try {
+      await deleteUser(deletingId);
+      toast.success('Doctor deleted successfully!');
+    } catch (error) {
+      console.error('Delete doctor error:', error);
+      toast.error('Failed to delete doctor.');
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  const resetForm = () => {
+    setName('');
+    setEmail('');
+    setPassword('');
+    setDepartmentId('');
+    setSpecialty('');
+    setEditingDoctor(null);
   };
 
   return (
@@ -104,10 +166,10 @@ export default function AdminDoctors() {
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="flex items-center">
                         <div className="flex-shrink-0 h-10 w-10">
-                          <img className="h-10 w-10 rounded-full object-cover border border-slate-200" src={doc.avatar || `https://ui-avatars.com/api/?name=${doc.name}&background=random`} alt="" />
+                          <img className="h-10 w-10 rounded-full object-cover border border-slate-200" src={doc.avatar || `https://ui-avatars.com/api/?name=${doc.name || 'Doctor'}&background=random`} alt="" />
                         </div>
                         <div className="ml-4">
-                          <div className="text-sm font-bold text-slate-900">{doc.name}</div>
+                          <div className="text-sm font-bold text-slate-900">{doc.name || 'Unknown Doctor'}</div>
                           <div className="text-xs text-slate-500 flex items-center gap-1 mt-0.5">
                             <Star className="h-3 w-3 text-amber-400 fill-amber-400" /> 4.8 (124 reviews)
                           </div>
@@ -142,10 +204,18 @@ export default function AdminDoctors() {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                       <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-md transition-colors" title="Edit">
+                        <button 
+                          onClick={() => handleEditClick(doc)}
+                          className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-md transition-colors" 
+                          title="Edit"
+                        >
                           <Edit className="h-4 w-4" />
                         </button>
-                        <button className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors" title="Delete">
+                        <button 
+                          onClick={() => setDeletingId(doc.id)}
+                          className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors" 
+                          title="Delete"
+                        >
                           <Trash2 className="h-4 w-4" />
                         </button>
                         <button className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-md transition-colors" title="More options">
@@ -185,14 +255,54 @@ export default function AdminDoctors() {
         </div>
       </div>
 
-      {showAddModal && (
+      {deletingId && (
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-xl max-w-sm w-full overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+            <div className="p-6">
+              <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center mb-4 mx-auto">
+                <Trash2 className="h-6 w-6 text-red-600" />
+              </div>
+              <h3 className="text-xl font-bold text-slate-900 text-center mb-2">Delete Doctor?</h3>
+              <p className="text-sm text-slate-500 text-center">Are you sure you want to delete this doctor? This action cannot be undone.</p>
+              <div className="flex gap-3 mt-6">
+                <button
+                  onClick={() => setDeletingId(null)}
+                  className="flex-1 px-4 py-2 border border-slate-200 rounded-lg text-sm font-medium text-slate-700 bg-white hover:bg-slate-50 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleDeleteDoctor}
+                  className="flex-1 px-4 py-2 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-red-600 hover:bg-red-700 transition-colors"
+                >
+                  Delete
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {(showAddModal || showEditModal) && (
         <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl shadow-xl max-w-md w-full overflow-hidden animate-in fade-in zoom-in-95 duration-200">
-            <div className="p-6 border-b border-slate-100">
-              <h3 className="text-xl font-bold text-slate-900">Add New Doctor</h3>
-              <p className="text-sm text-slate-500 mt-1">Enter the details for the new medical staff member.</p>
+            <div className="p-6 border-b border-slate-100 flex justify-between items-center">
+              <div>
+                <h3 className="text-xl font-bold text-slate-900">{showEditModal ? 'Edit Doctor' : 'Add New Doctor'}</h3>
+                <p className="text-sm text-slate-500 mt-1">{showEditModal ? 'Update the details for this doctor.' : 'Enter the details for the new medical staff member.'}</p>
+              </div>
+              <button 
+                onClick={() => {
+                  setShowAddModal(false);
+                  setShowEditModal(false);
+                  resetForm();
+                }}
+                className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors"
+              >
+                <X className="h-5 w-5" />
+              </button>
             </div>
-            <form onSubmit={handleAddDoctor} className="p-6 space-y-4">
+            <form onSubmit={showEditModal ? handleUpdateDoctor : handleAddDoctor} className="p-6 space-y-4">
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1.5">Full Name</label>
                 <input
@@ -209,12 +319,53 @@ export default function AdminDoctors() {
                 <input
                   type="email"
                   required
+                  disabled={showEditModal}
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="block w-full px-3 py-2 border border-slate-200 rounded-lg shadow-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 sm:text-sm transition-colors"
+                  className={`block w-full px-3 py-2 border border-slate-200 rounded-lg shadow-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 sm:text-sm transition-colors ${showEditModal ? 'bg-slate-100 text-slate-500 cursor-not-allowed' : ''}`}
                   placeholder="doctor@hospital.com"
                 />
+                {showEditModal && (
+                  <p className="mt-1 text-xs text-slate-500">Email cannot be changed after creation.</p>
+                )}
               </div>
+              {!showEditModal && (
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1.5">Password</label>
+                  <input
+                    type="password"
+                    required
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="block w-full px-3 py-2 border border-slate-200 rounded-lg shadow-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 sm:text-sm transition-colors"
+                    placeholder="Create a secure password"
+                  />
+                </div>
+              )}
+              {showEditModal && (
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1.5">Password</label>
+                  <div className="flex items-center justify-between p-3 bg-slate-50 border border-slate-200 rounded-lg">
+                    <span className="text-sm text-slate-600">Password cannot be edited directly for security reasons.</span>
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        try {
+                          const { sendPasswordResetEmail } = await import('firebase/auth');
+                          const { auth } = await import('../../firebase');
+                          await sendPasswordResetEmail(auth, email);
+                          toast.success('Password reset email sent to ' + email);
+                        } catch (error) {
+                          toast.error('Failed to send password reset email.');
+                        }
+                      }}
+                      className="px-3 py-1.5 bg-white border border-slate-200 rounded-md text-xs font-medium text-indigo-600 hover:bg-indigo-50 transition-colors"
+                    >
+                      Send Reset Email
+                    </button>
+                  </div>
+                </div>
+              )}
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1.5">Department</label>
                 {departments.length === 0 ? (
@@ -249,7 +400,11 @@ export default function AdminDoctors() {
               <div className="flex justify-end gap-3 pt-6 mt-6 border-t border-slate-100">
                 <button
                   type="button"
-                  onClick={() => setShowAddModal(false)}
+                  onClick={() => {
+                    setShowAddModal(false);
+                    setShowEditModal(false);
+                    resetForm();
+                  }}
                   className="px-4 py-2 border border-slate-200 rounded-lg text-sm font-medium text-slate-700 bg-white hover:bg-slate-50 transition-colors"
                 >
                   Cancel
@@ -265,7 +420,7 @@ export default function AdminDoctors() {
                       Saving...
                     </>
                   ) : (
-                    'Save Doctor'
+                    showEditModal ? 'Update Doctor' : 'Save Doctor'
                   )}
                 </button>
               </div>

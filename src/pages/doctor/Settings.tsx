@@ -1,10 +1,21 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { useAppContext } from '../../context/AppContext';
-import { User, Bell, Shield, Key, Smartphone, Mail, Save, Camera, Calendar, FileText } from 'lucide-react';
+import { User, Bell, Shield, Key, Smartphone, Mail, Save, Camera, Calendar, FileText, Loader2 } from 'lucide-react';
 
 export default function DoctorSettings() {
-  const { currentUser } = useAppContext();
+  const { currentUser, uploadAvatar } = useAppContext();
   const [activeTab, setActiveTab] = useState<'profile' | 'notifications' | 'security'>('profile');
+  const [isUploading, setIsUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    
+    setIsUploading(true);
+    await uploadAvatar(file);
+    setIsUploading(false);
+  };
 
   if (!currentUser) return null;
 
@@ -73,8 +84,19 @@ export default function DoctorSettings() {
                     </button>
                   </div>
                   <div>
-                    <button className="px-4 py-2 border border-slate-200 text-sm font-medium rounded-lg text-slate-700 bg-white hover:bg-slate-50 shadow-sm transition-colors">
-                      Change Picture
+                    <input 
+                      type="file" 
+                      ref={fileInputRef} 
+                      onChange={handleFileChange} 
+                      accept="image/jpeg,image/png,image/gif" 
+                      className="hidden" 
+                    />
+                    <button 
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={isUploading}
+                      className="px-4 py-2 border border-slate-200 text-sm font-medium rounded-lg text-slate-700 bg-white hover:bg-slate-50 shadow-sm transition-colors flex items-center"
+                    >
+                      {isUploading ? <><Loader2 className="animate-spin h-4 w-4 mr-2" /> Uploading...</> : 'Change Picture'}
                     </button>
                     <p className="text-xs text-slate-500 mt-2">JPG, GIF or PNG. Max size of 800K</p>
                   </div>

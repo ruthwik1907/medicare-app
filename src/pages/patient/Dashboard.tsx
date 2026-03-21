@@ -90,10 +90,10 @@ export default function PatientDashboard() {
                   <div key={apt.id} className="p-6 hover:bg-slate-50 transition-colors">
                     <div className="flex items-start justify-between mb-4">
                       <div className="flex items-center gap-3">
-                        <img src={doctor?.avatar || `https://ui-avatars.com/api/?name=${doctor?.name}&background=random`} alt={doctor?.name} className="w-12 h-12 rounded-full object-cover border border-slate-200" />
+                        <img src={doctor?.avatar || `https://ui-avatars.com/api/?name=${doctor?.name || 'Doctor'}&background=random`} alt={doctor?.name || 'Doctor'} className="w-12 h-12 rounded-full object-cover border border-slate-200" />
                         <div>
-                          <p className="font-semibold text-slate-900">Dr. {doctor?.name}</p>
-                          <p className="text-sm text-slate-500 capitalize">{doctor?.specialty}</p>
+                          <p className="font-semibold text-slate-900">Dr. {doctor?.name || 'Unknown Doctor'}</p>
+                          <p className="text-sm text-slate-500 capitalize">{doctor?.specialty || 'General Practice'}</p>
                         </div>
                       </div>
                       <span className={`px-3 py-1 text-xs font-medium rounded-full flex items-center gap-1.5 ${
@@ -148,7 +148,7 @@ export default function PatientDashboard() {
                     <div key={rx.id} className="p-6 hover:bg-slate-50 transition-colors">
                       <div className="flex justify-between items-start mb-3">
                         <div>
-                          <p className="font-semibold text-slate-900">Prescribed by Dr. {doctor?.name}</p>
+                          <p className="font-semibold text-slate-900">Prescribed by Dr. {doctor?.name || 'Unknown Doctor'}</p>
                           <p className="text-xs text-slate-500 mt-0.5">{new Date(rx.date).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</p>
                         </div>
                         <span className="bg-slate-100 text-slate-600 text-xs px-2.5 py-1 rounded-md font-medium border border-slate-200">Rx</span>

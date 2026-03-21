@@ -52,6 +52,7 @@ export const DashboardLayout = ({ allowedRoles }: { allowedRoles: string[] }) =>
     { name: 'Patients', href: '/admin/patients', icon: Users },
     { name: 'Appointments', href: '/admin/appointments', icon: Calendar },
     { name: 'Departments', href: '/admin/departments', icon: Building },
+    { name: 'Invoices', href: '/admin/invoices', icon: CreditCard },
     { name: 'Reports', href: '/admin/reports', icon: PieChart },
     { name: 'Settings', href: '/admin/settings', icon: Settings },
   ];

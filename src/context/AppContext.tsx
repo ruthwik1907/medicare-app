@@ -1,14 +1,15 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { db, auth, secondaryAuth } from '../firebase';
+import { db, auth, secondaryAuth, storage } from '../firebase';
 import { 
   collection, doc, onSnapshot, setDoc, updateDoc, deleteDoc, 
   query, where, getDoc, addDoc, getDocs 
 } from 'firebase/firestore';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { 
   signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged 
 } from 'firebase/auth';
 import toast from 'react-hot-toast';
-import { sendAppointmentConfirmationEmail } from '../services/emailService';
+import { sendAppointmentConfirmationEmail, sendLabReportReadyEmail, sendPrescriptionReadyEmail } from '../services/emailService';
 
 export type Role = 'patient' | 'doctor' | 'admin' | 'receptionist' | 'pharmacist' | 'lab_technician';
 
@@ -48,10 +49,13 @@ export interface Department {
 export interface DoctorSchedule {
   id: string;
   doctorId: string;
-  dayOfWeek: number; // 0-6 (Sun-Sat)
+  dayOfWeek: string; // 'Monday', 'Tuesday', etc.
   startTime: string; // "09:00"
   endTime: string; // "17:00"
   slotDurationMinutes: number; // e.g., 30
+  breakStart?: string;
+  breakEnd?: string;
+  isWorking?: boolean;
 }
 
 export interface Appointment {
@@ -185,7 +189,7 @@ interface AppContextType {
   addMedicalRecord: (data: Omit<MedicalRecord, 'id' | 'date'>) => Promise<void>;
   addPrescription: (data: Omit<Prescription, 'id' | 'date' | 'status'>) => Promise<void>;
   dispensePrescription: (id: string, pharmacistId: string) => Promise<void>;
-  addDoctor: (data: Partial<User>) => Promise<void>;
+  addDoctor: (data: Partial<User> & { password?: string }) => Promise<void>;
   addDepartment: (data: Omit<Department, 'id'>) => Promise<void>;
   generateInvoice: (data: Omit<Invoice, 'id' | 'status'>) => Promise<void>;
   payInvoice: (id: string, method: Invoice['paymentMethod'], transactionId?: string) => Promise<void>;
@@ -197,6 +201,9 @@ interface AppContextType {
   createAdminUser: (data: Partial<User> & { password?: string }) => Promise<void>;
   updateAdminUser: (id: string, data: Partial<User>) => Promise<void>;
   deleteUser: (id: string) => Promise<void>;
+  updateDoctorSchedule: (doctorId: string, schedules: Omit<DoctorSchedule, 'id'>[]) => Promise<void>;
+  uploadAvatar: (file: File) => Promise<void>;
+  uploadLabReport: (file: File, patientId: string, doctorId: string, testName: string, labRequestId?: string) => Promise<void>;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -395,6 +402,22 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
   const addPrescription = async (data: Omit<Prescription, 'id' | 'date' | 'status'>) => {
     const newRx = { ...data, date: new Date().toISOString().split('T')[0], status: 'pending' };
     await addDoc(collection(db, 'prescriptions'), newRx);
+
+    // Send email notification
+    const patient = users.find(u => u.id === data.patientId);
+    const doctor = users.find(u => u.id === data.doctorId);
+    if (patient && patient.email && doctor) {
+      try {
+        await sendPrescriptionReadyEmail({
+          patient_name: patient.name,
+          patient_email: patient.email,
+          doctor_name: doctor.name,
+          date: newRx.date
+        });
+      } catch (error) {
+        console.error("Could not send prescription email:", error);
+      }
+    }
   };
 
   const dispensePrescription = async (id: string, pharmacistId: string) => {
@@ -405,16 +428,85 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     });
   };
 
-  const addDoctor = async (data: Partial<User>) => {
-    const newDoc = {
-      name: data.name || 'New Doctor', 
-      email: data.email || '', 
-      role: 'doctor',
-      departmentId: data.departmentId, 
-      specialty: data.specialty, 
-      avatar: `https://picsum.photos/seed/${Date.now()}/200/200`,
-    };
-    await addDoc(collection(db, 'users'), newDoc);
+  const addDoctor = async (data: Partial<User> & { password?: string }) => {
+    try {
+      const result = await createUserWithEmailAndPassword(secondaryAuth, data.email || '', data.password || '123456');
+      const user = result.user;
+      
+      const newDoc: User = {
+        id: user.uid,
+        name: data.name || 'New Doctor', 
+        email: data.email || '', 
+        role: 'doctor',
+        departmentId: data.departmentId, 
+        specialty: data.specialty, 
+        avatar: `https://picsum.photos/seed/${user.uid}/200/200`,
+      };
+      
+      await setDoc(doc(db, 'users', user.uid), newDoc);
+      // Sign out the secondary auth so it doesn't interfere
+      await signOut(secondaryAuth);
+    } catch (error) {
+      console.error("Doctor registration failed:", error);
+      throw error;
+    }
+  };
+
+  const uploadAvatar = async (file: File) => {
+    if (!currentUser) return;
+    try {
+      const storageRef = ref(storage, `avatars/${currentUser.id}`);
+      await uploadBytes(storageRef, file);
+      const url = await getDownloadURL(storageRef);
+      await updateDoc(doc(db, 'users', currentUser.id), { avatar: url });
+      setCurrentUser({ ...currentUser, avatar: url });
+      toast.success('Profile picture updated!');
+    } catch (error) {
+      console.error("Error uploading avatar:", error);
+      toast.error('Failed to upload profile picture.');
+    }
+  };
+
+  const uploadLabReport = async (file: File, patientId: string, doctorId: string, testName: string, labRequestId?: string) => {
+    try {
+      const storageRef = ref(storage, `lab_reports/${patientId}/${Date.now()}_${file.name}`);
+      await uploadBytes(storageRef, file);
+      const url = await getDownloadURL(storageRef);
+      
+      const newReport: Omit<LabReport, 'id'> = {
+        patientId,
+        doctorId,
+        testName,
+        labRequestId: labRequestId || 'manual',
+        date: new Date().toISOString().split('T')[0],
+        status: 'completed',
+        resultData: url
+      };
+      
+      await addDoc(collection(db, 'labReports'), newReport);
+      toast.success('Lab report uploaded successfully!');
+
+      // Send email notification
+      const patient = users.find(u => u.id === patientId);
+      const doctor = users.find(u => u.id === doctorId);
+      if (patient && patient.email && doctor) {
+        try {
+          await sendLabReportReadyEmail({
+            patient_name: patient.name,
+            patient_email: patient.email,
+            doctor_name: doctor.name,
+            test_name: testName,
+            date: newReport.date
+          });
+        } catch (emailError) {
+          console.error("Could not send lab report email:", emailError);
+        }
+      }
+    } catch (error) {
+      console.error("Error uploading lab report:", error);
+      toast.error('Failed to upload lab report.');
+      throw error;
+    }
   };
 
   const addDepartment = async (data: Omit<Department, 'id'>) => {
@@ -495,13 +587,26 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     await deleteDoc(doc(db, 'users', id));
   };
 
+  const updateDoctorSchedule = async (doctorId: string, schedules: Omit<DoctorSchedule, 'id'>[]) => {
+    // First, delete existing schedules for this doctor
+    const existingSchedules = doctorSchedules.filter(s => s.doctorId === doctorId);
+    for (const schedule of existingSchedules) {
+      await deleteDoc(doc(db, 'doctorSchedules', schedule.id));
+    }
+    
+    // Then add the new ones
+    for (const schedule of schedules) {
+      await addDoc(collection(db, 'doctorSchedules'), schedule);
+    }
+  };
+
   return (
     <AppContext.Provider value={{
-      currentUser, users, departments, doctorSchedules, appointments, medicalRecords, prescriptions, invoices, labRequests, labReports, messages,
+      currentUser, users, departments, doctorSchedules, appointments, medicalRecords, prescriptions, invoices, labRequests, labReports, messages, isAuthReady,
       login, logout, registerPatient, bookAppointment, updateAppointmentStatus, addMedicalRecord,
       addPrescription, dispensePrescription, addDoctor, addDepartment, generateInvoice, payInvoice,
       sendMessage, markMessageRead, requestLabTest, addLabReport, updateLabReportStatus,
-      createAdminUser, updateAdminUser, deleteUser
+      createAdminUser, updateAdminUser, deleteUser, updateDoctorSchedule, uploadAvatar, uploadLabReport
     }}>
       {children}
     </AppContext.Provider>

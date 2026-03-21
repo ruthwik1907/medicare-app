@@ -43,26 +43,15 @@ export default function BookAppointment() {
     }
 
     const selectedDate = new Date(date);
-    const dayOfWeek = selectedDate.getDay(); // 0-6
+    const dayOfWeekStr = selectedDate.toLocaleDateString('en-US', { weekday: 'long' });
     
-    let schedule = doctorSchedules.find(s => s.doctorId === doctorId && s.dayOfWeek === dayOfWeek);
+    // Find the doctor's schedule for this day
+    const schedule = doctorSchedules.find(s => s.doctorId === doctorId && s.dayOfWeek === dayOfWeekStr);
     
-    if (!schedule) {
-      // Default schedule: Mon-Fri 09:00 to 17:00, 30 min slots
-      if (dayOfWeek >= 1 && dayOfWeek <= 5) {
-        schedule = {
-          id: 'default',
-          doctorId,
-          dayOfWeek,
-          startTime: '09:00',
-          endTime: '17:00',
-          slotDurationMinutes: 30
-        };
-      } else {
-        setAvailableSlots([]);
-        setTime('');
-        return;
-      }
+    if (!schedule || schedule.isWorking === false) {
+      setAvailableSlots([]);
+      setTime('');
+      return;
     }
 
     // Generate slots
@@ -70,8 +59,16 @@ export default function BookAppointment() {
     const [startHour, startMin] = schedule.startTime.split(':').map(Number);
     const [endHour, endMin] = schedule.endTime.split(':').map(Number);
     
+    // Parse break times if they exist
+    let breakStartHour = -1, breakStartMin = -1, breakEndHour = -1, breakEndMin = -1;
+    if (schedule.breakStart && schedule.breakEnd) {
+      [breakStartHour, breakStartMin] = schedule.breakStart.split(':').map(Number);
+      [breakEndHour, breakEndMin] = schedule.breakEnd.split(':').map(Number);
+    }
+    
     let currentHour = startHour;
     let currentMin = startMin;
+    const slotDurationMinutes = 30; // Default slot duration
     
     const now = new Date();
     const isToday = selectedDate.toDateString() === now.toDateString();
@@ -87,6 +84,17 @@ export default function BookAppointment() {
         }
       }
       
+      // Check if slot is during break time
+      let isBreak = false;
+      if (breakStartHour !== -1) {
+        const currentMins = currentHour * 60 + currentMin;
+        const breakStartMins = breakStartHour * 60 + breakStartMin;
+        const breakEndMins = breakEndHour * 60 + breakEndMin;
+        if (currentMins >= breakStartMins && currentMins < breakEndMins) {
+          isBreak = true;
+        }
+      }
+      
       // Check if slot is already booked
       const isBooked = appointments.some(a => 
         a.doctorId === doctorId && 
@@ -95,11 +103,11 @@ export default function BookAppointment() {
         a.status !== 'cancelled'
       );
       
-      if (!isPast && !isBooked) {
+      if (!isPast && !isBreak && !isBooked) {
         slots.push(timeString);
       }
       
-      currentMin += schedule.slotDurationMinutes;
+      currentMin += slotDurationMinutes;
       if (currentMin >= 60) {
         currentHour += Math.floor(currentMin / 60);
         currentMin = currentMin % 60;
@@ -208,13 +216,6 @@ export default function BookAppointment() {
 
             {/* Right side - Form */}
             <div className="md:w-2/3 p-8 md:p-10">
-              {error && (
-                <div className="mb-6 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl flex items-start">
-                  <AlertCircle className="w-5 h-5 mr-3 shrink-0 mt-0.5" />
-                  <p className="text-sm">{error}</p>
-                </div>
-              )}
-
               <form onSubmit={handleSubmit} className="space-y-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   {/* Department Selection */}

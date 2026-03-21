@@ -1,6 +1,9 @@
 import React, { useState } from 'react';
 import { useAppContext } from '../../context/AppContext';
 import { FileText, Download, Printer, Search, Filter, Pill, Calendar, User, Activity } from 'lucide-react';
+import jsPDF from 'jspdf';
+import 'jspdf-autotable';
+import toast from 'react-hot-toast';
 
 export default function PatientRecords() {
   const { currentUser, prescriptions, labReports, users } = useAppContext();
@@ -28,6 +31,113 @@ export default function PatientRecords() {
              (r.resultData && r.resultData.toLowerCase().includes(searchTerm.toLowerCase()));
     })
     .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+  const downloadPrescriptionPDF = (rx: any, doctorName: string) => {
+    try {
+      const doc = new jsPDF();
+      
+      // Header
+      doc.setFontSize(20);
+      doc.setTextColor(30, 58, 138); // Indigo-900
+      doc.text('PRESCRIPTION', 14, 22);
+      
+      doc.setFontSize(10);
+      doc.setTextColor(100, 116, 139); // Slate-500
+      doc.text(`Date: ${new Date(rx.date).toLocaleDateString()}`, 14, 30);
+      doc.text(`Doctor: Dr. ${doctorName}`, 14, 35);
+      
+      // Patient Info
+      doc.setFontSize(12);
+      doc.setTextColor(15, 23, 42); // Slate-900
+      doc.text('Patient Information:', 14, 50);
+      doc.setFontSize(10);
+      doc.setTextColor(100, 116, 139);
+      doc.text(`Name: ${currentUser.name}`, 14, 55);
+      doc.text(`Email: ${currentUser.email}`, 14, 60);
+      
+      // Medications Table
+      const tableColumn = ["Medication", "Dosage", "Route", "Frequency", "Duration"];
+      const tableRows = rx.items?.map((item: any) => [
+        item.medicationName,
+        item.dosage,
+        item.route,
+        item.frequency,
+        `${item.durationDays} days`
+      ]) || [];
+      
+      (doc as any).autoTable({
+        startY: 70,
+        head: [tableColumn],
+        body: tableRows,
+        theme: 'striped',
+        headStyles: { fillColor: [79, 70, 229] }, // Indigo-600
+        styles: { fontSize: 10, cellPadding: 5 },
+      });
+      
+      // Footer
+      const finalY = (doc as any).lastAutoTable.finalY || 70;
+      doc.setFontSize(10);
+      doc.setTextColor(100, 116, 139);
+      doc.text('This is a digitally generated prescription.', 14, finalY + 20);
+      
+      doc.save(`Prescription_${new Date(rx.date).getTime()}.pdf`);
+      toast.success('Prescription downloaded successfully');
+    } catch (error) {
+      console.error('Error generating PDF:', error);
+      toast.error('Failed to generate PDF');
+    }
+  };
+
+  const downloadLabReportPDF = (report: any, doctorName: string) => {
+    try {
+      const doc = new jsPDF();
+      
+      // Header
+      doc.setFontSize(20);
+      doc.setTextColor(16, 185, 129); // Emerald-500
+      doc.text('LABORATORY REPORT', 14, 22);
+      
+      doc.setFontSize(10);
+      doc.setTextColor(100, 116, 139); // Slate-500
+      doc.text(`Date: ${new Date(report.date).toLocaleDateString()}`, 14, 30);
+      doc.text(`Requested by: Dr. ${doctorName}`, 14, 35);
+      
+      // Patient Info
+      doc.setFontSize(12);
+      doc.setTextColor(15, 23, 42); // Slate-900
+      doc.text('Patient Information:', 14, 50);
+      doc.setFontSize(10);
+      doc.setTextColor(100, 116, 139);
+      doc.text(`Name: ${currentUser.name}`, 14, 55);
+      doc.text(`Email: ${currentUser.email}`, 14, 60);
+      
+      // Test Details
+      doc.setFontSize(14);
+      doc.setTextColor(15, 23, 42);
+      doc.text(`Test: ${report.testName}`, 14, 75);
+      
+      doc.setFontSize(12);
+      doc.text('Results & Interpretation:', 14, 85);
+      
+      doc.setFontSize(10);
+      doc.setTextColor(51, 65, 85); // Slate-700
+      
+      const splitText = doc.splitTextToSize(report.resultData || 'Results are pending and will be available soon.', 180);
+      doc.text(splitText, 14, 95);
+      
+      // Footer
+      const finalY = 95 + (splitText.length * 5);
+      doc.setFontSize(10);
+      doc.setTextColor(100, 116, 139);
+      doc.text('This is a digitally generated lab report.', 14, finalY + 20);
+      
+      doc.save(`LabReport_${new Date(report.date).getTime()}.pdf`);
+      toast.success('Lab report downloaded successfully');
+    } catch (error) {
+      console.error('Error generating PDF:', error);
+      toast.error('Failed to generate PDF');
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -108,7 +218,7 @@ export default function PatientRecords() {
                             </span>
                             <span className="flex items-center">
                               <User className="h-4 w-4 mr-1.5" />
-                              Dr. {doctor?.name}
+                              Dr. {doctor?.name || 'Unknown Doctor'}
                             </span>
                           </div>
                         </div>
@@ -117,7 +227,11 @@ export default function PatientRecords() {
                         <button className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors">
                           <Printer className="h-5 w-5" />
                         </button>
-                        <button className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors">
+                        <button 
+                          onClick={() => downloadPrescriptionPDF(rx, doctor?.name || 'Unknown Doctor')}
+                          className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                          title="Download PDF"
+                        >
                           <Download className="h-5 w-5" />
                         </button>
                       </div>
@@ -188,7 +302,7 @@ export default function PatientRecords() {
                             </span>
                             <span className="flex items-center">
                               <User className="h-4 w-4 mr-1.5" />
-                              Requested by Dr. {doctor?.name}
+                              Requested by Dr. {doctor?.name || 'Unknown Doctor'}
                             </span>
                           </div>
                         </div>
@@ -199,7 +313,11 @@ export default function PatientRecords() {
                         }`}>
                           {report.status}
                         </span>
-                        <button className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors">
+                        <button 
+                          onClick={() => downloadLabReportPDF(report, doctor?.name || 'Unknown Doctor')}
+                          className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                          title="Download PDF"
+                        >
                           <Download className="h-5 w-5" />
                         </button>
                       </div>

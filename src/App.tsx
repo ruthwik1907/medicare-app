@@ -44,6 +44,7 @@ import AdminDoctors from './pages/admin/Doctors';
 import AdminPatients from './pages/admin/Patients';
 import AdminAppointments from './pages/admin/Appointments';
 import AdminDepartments from './pages/admin/Departments';
+import AdminInvoices from './pages/admin/Invoices';
 import AdminReports from './pages/admin/Reports';
 import AdminSettings from './pages/admin/Settings';
 
@@ -95,6 +96,7 @@ export default function App() {
             <Route path="patients" element={<AdminPatients />} />
             <Route path="appointments" element={<AdminAppointments />} />
             <Route path="departments" element={<AdminDepartments />} />
+            <Route path="invoices" element={<AdminInvoices />} />
             <Route path="reports" element={<AdminReports />} />
             <Route path="settings" element={<AdminSettings />} />
             <Route path="*" element={<Navigate to="/admin" replace />} />

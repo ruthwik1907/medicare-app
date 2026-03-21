@@ -19,38 +19,50 @@ export default function AdminReports() {
 
   const COLORS = ['#10b981', '#f59e0b', '#3b82f6', '#ef4444'];
 
-  // Prepare data for Revenue by Department (mocked based on appointments)
+  // Prepare data for Revenue by Department
   const deptRevenue = departments.map(dept => {
     const deptAppointments = appointments.filter(a => a.departmentId === dept.id);
-    // Mock revenue calculation: $150 per completed appointment
-    const revenue = deptAppointments.filter(a => a.status === 'completed').length * 150;
+    const deptAppointmentIds = deptAppointments.map(a => a.id);
+    
+    const revenue = invoices
+      .filter(i => i.status === 'paid' && i.appointmentId && deptAppointmentIds.includes(i.appointmentId))
+      .reduce((sum, inv) => sum + inv.amount, 0);
+      
     return {
       name: dept.name,
       revenue
     };
   }).filter(d => d.revenue > 0);
 
-  // Mock data for Patient Growth
-  const patientGrowthData = [
-    { month: 'Jan', patients: 120 },
-    { month: 'Feb', patients: 150 },
-    { month: 'Mar', patients: 180 },
-    { month: 'Apr', patients: 220 },
-    { month: 'May', patients: 270 },
-    { month: 'Jun', patients: 310 },
-    { month: 'Jul', patients: 380 },
-  ];
+  // Data for Patient Growth (Unique patients seen per month over last 6 months)
+  const patientGrowthData = Array.from({ length: 6 }).map((_, i) => {
+    const d = new Date();
+    d.setMonth(d.getMonth() - (5 - i));
+    const monthStr = d.toLocaleString('default', { month: 'short' });
+    const yearMonth = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+    
+    const uniquePatients = new Set(
+      appointments
+        .filter(a => a.date.startsWith(yearMonth))
+        .map(a => a.patientId)
+    ).size;
+      
+    return { month: monthStr, patients: uniquePatients };
+  });
 
-  // Mock data for Monthly Revenue
-  const monthlyRevenueData = [
-    { month: 'Jan', revenue: 45000 },
-    { month: 'Feb', revenue: 52000 },
-    { month: 'Mar', revenue: 48000 },
-    { month: 'Apr', revenue: 61000 },
-    { month: 'May', revenue: 59000 },
-    { month: 'Jun', revenue: 72000 },
-    { month: 'Jul', revenue: 85000 },
-  ];
+  // Data for Monthly Revenue (over last 6 months)
+  const monthlyRevenueData = Array.from({ length: 6 }).map((_, i) => {
+    const d = new Date();
+    d.setMonth(d.getMonth() - (5 - i));
+    const monthStr = d.toLocaleString('default', { month: 'short' });
+    const yearMonth = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+    
+    const revenue = invoices
+      .filter(inv => inv.status === 'paid' && inv.date.startsWith(yearMonth))
+      .reduce((sum, inv) => sum + inv.amount, 0);
+      
+    return { month: monthStr, revenue };
+  });
 
   return (
     <div className="space-y-6">
